@@ -31,6 +31,9 @@ class AccountUserManager(BaseUserManager):
 
 class Account(AbstractBaseUser, PermissionsMixin):
 
+    class Meta:
+        ordering = ('name',)
+
     CONTACT = -1  # Not signed up; stub account for future account
     SIGNED_UP = 0
     DELETED = 2
