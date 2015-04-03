@@ -9,3 +9,13 @@ class IsAccountOwnerOrReadOnly(permissions.BasePermission):
             return True
 
         return obj == request.user
+
+
+class IsAlbumOwnerAndDeleteCustom(permissions.BasePermission):
+
+    def has_object_permission(self, request, view, obj):
+
+        if request.method == 'DELETE' and obj.album_type.name != 'CUSTOM':
+            return False
+
+        return obj.owner == request.user

@@ -88,3 +88,54 @@ class Account(AbstractBaseUser, PermissionsMixin):
             raise ValueError(_('Does not seem to be a valid phone number'))
 
         return phonenumbers.format_number(pn, phonenumbers.PhoneNumberFormat.E164)
+
+
+class AlbumType(models.Model):
+
+    class Meta:
+        ordering = ('sort_order',)
+
+    id = models.PositiveIntegerField(primary_key=True)  # No auto-increment
+    name = models.CharField(unique=True, max_length=40)
+    description = models.CharField(max_length=80)
+    sort_order = models.PositiveSmallIntegerField()
+    created = models.DateTimeField(auto_now_add=True)
+    modified = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+
+
+class ActiveStatusManager(models.Manager):
+    "Return only items where the status is ACTIVE."
+
+    def get_queryset(self):
+        return super().get_queryset().filter(status=self.model.ACTIVE)
+
+
+class Album(models.Model):
+
+    ACTIVE = 1
+    INACTIVE = 2
+    DELETED = 3
+
+    STATUS_CHOICES = (
+        (ACTIVE, 'Active'),
+        (INACTIVE, 'Inactive'),
+        (DELETED, 'Deleted'),
+    )
+
+    active = ActiveStatusManager()
+    objects = models.Manager()
+
+    owner = models.ForeignKey('Account', related_name='albums')  # This is the owner of the album
+    # event = models.ForeignKey('Event')
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    album_type = models.ForeignKey('AlbumType')
+    status = models.SmallIntegerField(choices=STATUS_CHOICES, default=ACTIVE)
+    created = models.DateTimeField(auto_now_add=True)
+    modified = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name

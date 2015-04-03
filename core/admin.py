@@ -4,11 +4,7 @@ from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm
 from django.utils.translation import ugettext_lazy as _
 from phonenumbers.phonenumberutil import NumberParseException
-from .models import Account
-
-
-class AccountManager(admin.ModelAdmin):
-    list_display = ('phone', 'name')
+from .models import Account, AlbumType, Album
 
 
 class AccountAdminMixin(object):
@@ -35,7 +31,7 @@ class AccountChangeForm(UserChangeForm, AccountAdminMixin):
 
 
 @admin.register(Account)
-class MyUserAdmin(UserAdmin):
+class AccountAdmin(UserAdmin):
     model = Account
 
     list_display = ('phone', 'name', 'is_staff')
@@ -60,3 +56,15 @@ class MyUserAdmin(UserAdmin):
 
     form = AccountChangeForm
     add_form = AccountCreationForm
+
+
+@admin.register(AlbumType)
+class AlbumTypeAdmin(admin.ModelAdmin):
+    list_display = ('id', 'name', 'description', 'sort_order')
+
+
+@admin.register(Album)
+class AlubmAdmin(admin.ModelAdmin):
+    list_filter = ('status', 'album_type')
+    list_display = ('name', 'owner', 'album_type', 'status')
+    search_fields = ('name', 'owner__phone')
