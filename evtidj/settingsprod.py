@@ -22,7 +22,7 @@ SECRET_KEY = '+&6-94v)i$^^ssu*cngktky$i3kxwfe=f&d(6ak8cjI&t!8y)ig*oak(c_5sfs'
 DEBUG = False
 
 ALLOWED_HOSTS = ["ec2-52-0-67-164.compute-1.amazonaws.com"]
-
+CONN_MAX_AGE = 600
 
 AUTH_USER_MODEL = 'core.Account'
 
@@ -106,6 +106,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/1.8/howto/static-files/
 
 STATIC_URL = '/static/'
+STATIC_ROOT = '/home/ubuntu/static/'
 
 REST_FRAMEWORK = {
     'PAGE_SIZE': 25,
