@@ -1,7 +1,9 @@
+from urllib.parse import unquote
 import phonenumbers
 from django.db import models
 from django.core.validators import RegexValidator
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
+from django.contrib.postgres.fields import HStoreField
 from django.utils import timezone
 from django.utils.translation import ugettext_lazy as _
 
@@ -99,6 +101,8 @@ class AlbumType(models.Model):
     name = models.CharField(unique=True, max_length=40)
     description = models.CharField(max_length=80)
     sort_order = models.PositiveSmallIntegerField()
+    is_virtual = models.BooleanField()
+    is_deletable = models.BooleanField()
     created = models.DateTimeField(auto_now_add=True)
     modified = models.DateTimeField(auto_now=True)
 
@@ -111,6 +115,50 @@ class ActiveStatusManager(models.Manager):
 
     def get_queryset(self):
         return super().get_queryset().filter(status=self.model.ACTIVE)
+
+class AlbumFile(models.Model):
+
+    PHOTO_TYPE = 1
+    VIDEO_TYPE = 2
+
+    FILETYPE_CHOICES = (
+        (PHOTO_TYPE, 'PHOTO'),
+        (VIDEO_TYPE, 'VIDEO'),
+    )
+
+    ACTIVE = 1
+    INACTIVE = 2
+    DELETED = 3
+
+    STATUS_CHOICES = (
+        (ACTIVE, 'Active'),
+        (INACTIVE, 'Inactive'),
+        (DELETED, 'Deleted'),
+    )
+
+    objects = models.Manager()
+    active = ActiveStatusManager()
+
+    owner = models.ForeignKey('Account')
+    file_url = models.URLField(unique=True)
+    width = models.PositiveIntegerField()
+    height = models.PositiveIntegerField()
+    size_bytes = models.PositiveIntegerField()
+    file_type = models.PositiveSmallIntegerField(choices=FILETYPE_CHOICES)
+    status = models.SmallIntegerField(choices=STATUS_CHOICES)
+    albums = models.ManyToManyField('Album', related_name='albumfiles')
+    created = models.DateTimeField(auto_now_add=True)
+    modified = models.DateTimeField(auto_now=True)
+
+    @property
+    def name(self):
+        if self.file_url:
+            return unquote(self.file_url.split("/")[-1])
+        else:
+            return ""
+
+    def __str__(self):
+        return self.name
 
 
 class Album(models.Model):
@@ -125,8 +173,11 @@ class Album(models.Model):
         (DELETED, 'Deleted'),
     )
 
-    active = ActiveStatusManager()
+    class Meta:
+        ordering = ('album_type__sort_order',)
+
     objects = models.Manager()
+    active = ActiveStatusManager()
 
     owner = models.ForeignKey('Account', related_name='albums')  # This is the owner of the album
     # event = models.ForeignKey('Event')
@@ -136,6 +187,62 @@ class Album(models.Model):
     status = models.SmallIntegerField(choices=STATUS_CHOICES, default=ACTIVE)
     created = models.DateTimeField(auto_now_add=True)
     modified = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+
+    def albumfiles_queryset(self, account):
+        """Return an appropriate queryset for this albumfile type.
+
+        Queryset will vary depending on if the album_type is virtual.
+        """
+        if not self.album_type.is_virtual:
+            return self.albumfiles.filter(status=AlbumFile.ACTIVE)
+        elif self.album_type.name == "ALLMEDIA":
+            return AlbumFile.active.filter(owner=account)
+        else:
+            raise NotImplementedError(_("%(name)s albumfiles query not implemented") % {'name': self.album_type.name})
+
+
+class Thumbnail(models.Model):
+
+    class Meta:
+        ordering = ('size_type',)
+        unique_together = (('albumfile', 'size_type'))
+
+    SIZE_48 = 48
+    SIZE_100 = 100
+    SIZE_144 = 144
+    SIZE_205 = 205
+    SIZE_320 = 320
+    SIZE_610 = 610
+    SIZE_960 = 960
+
+    SIZE_CHOICES = (
+        (SIZE_48, "SIZE_48"),
+        (SIZE_100, "SIZE_100"),
+        (SIZE_144, "SIZE_144"),
+        (SIZE_205, "SIZE_205"),
+        (SIZE_320, "SIZE_320"),
+        (SIZE_610, "SIZE_610"),
+        (SIZE_960, "SIZE_960"),
+    )
+
+    albumfile = models.ForeignKey('AlbumFile', related_name='thumbnails')
+    file_url = models.URLField(unique=True)
+    size_type = models.PositiveSmallIntegerField(choices=SIZE_CHOICES)
+    width = models.PositiveIntegerField()
+    height = models.PositiveIntegerField()
+    size_bytes = models.PositiveIntegerField()
+    created = models.DateTimeField(auto_now_add=True)
+    modified = models.DateTimeField(auto_now=True)
+
+    @property
+    def name(self):
+        if self.file_url:
+            return unquote(self.file_url.split("/")[-1])
+        else:
+            return ""
 
     def __str__(self):
         return self.name

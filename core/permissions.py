@@ -18,4 +18,10 @@ class IsAlbumOwnerAndDeleteCustom(permissions.BasePermission):
         if request.method == 'DELETE' and obj.album_type.name != 'CUSTOM':
             return False
 
-        return obj.owner == request.user
+        return obj.owner_id == request.user.id
+
+
+class IsOwner(permissions.BasePermission):
+
+    def has_object_permission(self, request, view, obj):
+        return obj.owner_id == request.user.id

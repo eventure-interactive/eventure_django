@@ -4,7 +4,7 @@ from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm
 from django.utils.translation import ugettext_lazy as _
 from phonenumbers.phonenumberutil import NumberParseException
-from .models import Account, AlbumType, Album
+from .models import Account, AlbumType, Album, AlbumFile, Thumbnail
 
 
 class AccountAdminMixin(object):
@@ -60,11 +60,21 @@ class AccountAdmin(UserAdmin):
 
 @admin.register(AlbumType)
 class AlbumTypeAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name', 'description', 'sort_order')
+    list_display = ('name', 'description', 'sort_order', 'is_virtual', 'is_deletable')
 
 
 @admin.register(Album)
-class AlubmAdmin(admin.ModelAdmin):
+class AlbumAdmin(admin.ModelAdmin):
     list_filter = ('status', 'album_type')
     list_display = ('name', 'owner', 'album_type', 'status')
     search_fields = ('name', 'owner__phone')
+
+
+@admin.register(AlbumFile)
+class AlbumFileAdmin(admin.ModelAdmin):
+    list_display = ('name', 'owner')
+
+
+@admin.register(Thumbnail)
+class ThumbnailAdmin(admin.ModelAdmin):
+    list_display = ('albumfile', 'size_type')

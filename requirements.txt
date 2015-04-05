@@ -1,0 +1,11 @@
+# usage:
+# pip install -r requirements.txt
+
+Django>=1.8
+
+django-debug-toolbar
+django-filter
+djangorestframework
+phonenumbers
+psycopg2
+pytz
