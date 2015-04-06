@@ -21,7 +21,7 @@ SECRET_KEY = '+&6-94v)i$^^ssu*cngktky$i3kxwfe=f&d(6ak8cjI&t!8y)ig*oak(c_5sfs'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS = ["ec2-52-0-67-164.compute-1.amazonaws.com"]
+ALLOWED_HOSTS = ["devapi-rest.eventure.com"]
 CONN_MAX_AGE = 600
 
 AUTH_USER_MODEL = 'core.Account'
