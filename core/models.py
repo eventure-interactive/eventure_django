@@ -116,6 +116,14 @@ class ActiveStatusManager(models.Manager):
     def get_queryset(self):
         return super().get_queryset().filter(status=self.model.ACTIVE)
 
+
+class ActiveProcessingStatusManager(models.Manager):
+    "Return only items where the status is ACTIVE or PROCESSING"
+
+    def get_queryset(self):
+        return super().get_queryset().filter(status__in=(self.model.ACTIVE, self.model.PROCESSING))
+
+
 class AlbumFile(models.Model):
 
     PHOTO_TYPE = 1
@@ -129,33 +137,39 @@ class AlbumFile(models.Model):
     ACTIVE = 1
     INACTIVE = 2
     DELETED = 3
+    PROCESSING = 4
+    ERROR = 5
 
     STATUS_CHOICES = (
         (ACTIVE, 'Active'),
         (INACTIVE, 'Inactive'),
+        (PROCESSING, 'Processing'),
+        (ERROR, 'Error'),
         (DELETED, 'Deleted'),
     )
 
+    class Meta:
+        unique_together = (("tmp_filename", "tmp_hostname"),)
+
     objects = models.Manager()
     active = ActiveStatusManager()
+    activepending = ActiveProcessingStatusManager()
 
     owner = models.ForeignKey('Account')
-    file_url = models.URLField(unique=True)
+    name = models.CharField(max_length=255, blank=True)
+    description = models.TextField(blank=True)
+    file_url = models.URLField(unique=True, null=True)
     width = models.PositiveIntegerField()
     height = models.PositiveIntegerField()
     size_bytes = models.PositiveIntegerField()
     file_type = models.PositiveSmallIntegerField(choices=FILETYPE_CHOICES)
     status = models.SmallIntegerField(choices=STATUS_CHOICES)
     albums = models.ManyToManyField('Album', related_name='albumfiles')
+    tmp_filename = models.CharField(max_length=255, null=True)
+    tmp_hostname = models.CharField(max_length=255, null=True)
     created = models.DateTimeField(auto_now_add=True)
     modified = models.DateTimeField(auto_now=True)
-
-    @property
-    def name(self):
-        if self.file_url:
-            return unquote(self.file_url.split("/")[-1])
-        else:
-            return ""
+    media_created = models.DateTimeField(null=True, blank=True)  # When the base media file was taken/created.
 
     def __str__(self):
         return self.name

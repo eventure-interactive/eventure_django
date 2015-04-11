@@ -1,14 +1,17 @@
 # from django.shortcuts import render
 
 from django.shortcuts import get_object_or_404
+from django.http import Http404
 from rest_framework import status, permissions, generics
 from rest_framework.decorators import api_view
+from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework.reverse import reverse
 from rest_framework.views import APIView
 from core.models import Account, Album, AlbumType, AlbumFile
 from core.serializers import AccountSerializer, AlbumSerializer, AlbumFileSerializer
-from core.permissions import IsAccountOwnerOrReadOnly, IsAlbumOwnerAndDeleteCustom, IsOwner
+from core.permissions import IsAccountOwnerOrReadOnly, IsAlbumOwnerAndDeleteCustom, IsOwner, \
+    IsAlbumUploadableOrReadOnly
 
 
 @api_view(('GET',))
@@ -40,10 +43,6 @@ class AlbumList(generics.ListCreateAPIView):
         user = self.request.user
         return Album.active.filter(owner=user).select_related('album_type')  # TODO: will need to add in Event albums
 
-    def perform_create(self, serializer):
-        custom_type = AlbumType.objects.get(name='CUSTOM')
-        serializer.save(owner=self.request.user, album_type=custom_type)
-
     serializer_class = AlbumSerializer
     permission_classes = (permissions.IsAuthenticated,)
 
@@ -69,21 +68,29 @@ class AlbumFileDetail(generics.RetrieveUpdateAPIView):
     permission_classes = (permissions.IsAuthenticated, )  # TODO: Permissions on this
 
 
-class AlbumFilesList(generics.ListAPIView):
+class AlbumFilesList(generics.ListCreateAPIView):
     "List the files in the album."
 
-    permission_classes = (permissions.IsAuthenticated, )  # TODO
+    permission_classes = (permissions.IsAuthenticated, IsAlbumUploadableOrReadOnly)  # TODO
     serializer_class = AlbumFileSerializer
-    queryset = Album.active.all().select_related('album_type')
+    # queryset = Album.active.all().select_related('album_type')
 
-    def list(self, request, *args, **kwargs):
-        album = self.get_object()
-        files = album.albumfiles_queryset(request.user)
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['album'] = self.get_album()
+        return context
 
-        page = self.paginate_queryset(files)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
+    def get_album(self):
 
-        serializer = self.get_serializer(files, many=True)
-        return Response(serializer.data)
+        try:
+            album = Album.active.select_related('album_type').get(pk=self.kwargs['pk'])
+        except Album.DoesNotExist:
+            raise Http404(_('Album does not exist'))
+
+        return album
+
+    def get_queryset(self):
+
+        album = self.get_album()
+
+        return album.albumfiles_queryset(self.request.user)

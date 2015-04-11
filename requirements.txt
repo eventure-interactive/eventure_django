@@ -9,3 +9,8 @@ djangorestframework
 phonenumbers
 psycopg2
 pytz
+boto
+requests
+Pillow
+celery[redis]
+django-celery
