@@ -1,11 +1,13 @@
 from django.core.exceptions import ValidationError
 from django.contrib import admin
+from django.contrib.gis import admin as gisadmin
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm
 from django.utils.translation import ugettext_lazy as _
 from phonenumbers.phonenumberutil import NumberParseException
-from .models import Account, AlbumType, Album, AlbumFile, Thumbnail
+from .models import Account, AlbumType, Album, AlbumFile, Thumbnail, Event
 
+admin.site.register(Event, gisadmin.GeoModelAdmin)
 
 class AccountAdminMixin(object):
 

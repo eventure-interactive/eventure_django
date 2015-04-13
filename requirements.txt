@@ -9,3 +9,4 @@ djangorestframework
 phonenumbers
 psycopg2
 pytz
+geopy
