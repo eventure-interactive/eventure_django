@@ -10,3 +10,9 @@ phonenumbers
 psycopg2
 pytz
 geopy
+boto
+requests
+Pillow
+celery[redis]
+django-celery
+
