@@ -53,7 +53,7 @@ class AlbumDetail(generics.RetrieveUpdateDestroyAPIView):
         return Album.active.filter(owner=self.request.user).select_related('album_type')
 
     def get_object(self):
-        album = super().get_object()
+        album = super(AlbumDetail, self).get_object()
         album.files = list(album.albumfiles_queryset(self.request.user))
         return album
 
@@ -73,10 +73,9 @@ class AlbumFilesList(generics.ListCreateAPIView):
 
     permission_classes = (permissions.IsAuthenticated, IsAlbumUploadableOrReadOnly)  # TODO
     serializer_class = AlbumFileSerializer
-    # queryset = Album.active.all().select_related('album_type')
 
     def get_serializer_context(self):
-        context = super().get_serializer_context()
+        context = super(AlbumFilesList, self).get_serializer_context()
         context['album'] = self.get_album()
         return context
 

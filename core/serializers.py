@@ -1,7 +1,7 @@
 from datetime import datetime
 import os
 import tempfile
-from urllib.parse import unquote
+from six.moves.urllib.parse import unquote
 import uuid
 from django.conf import settings
 from django.forms import widgets
@@ -41,7 +41,7 @@ class FileFieldAllowEmpty(serializers.FileField):
         if not data and not self.required:
             return data
 
-        return super().to_internal_value(data)
+        return super(FileFieldAllowEmpty, self).to_internal_value(data)
 
 
 class TempImageFileData(object):
