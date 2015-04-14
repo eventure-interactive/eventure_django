@@ -8,6 +8,7 @@ Intended for production use
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 import os
+import socket
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -111,3 +112,12 @@ STATIC_ROOT = '/home/ubuntu/static/'
 REST_FRAMEWORK = {
     'PAGE_SIZE': 25,
 }
+
+# These credentials are for the eventure-mediaserver-dev account
+AWS_MEDIA_ACCESS_KEY = 'AKIAIUIZFAO5NV43556Q'
+AWS_MEDIA_SECRET_KEY = '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'
+S3_MEDIA_UPLOAD_BUCKET = 'eventuremember-dev'
+S3_MEDIA_REGION = 'us-east-1'
+
+TEMP_ALBUMFILE_DIR = os.path.join(BASE_DIR, 'albumfile_tmp')
+HOST_NAME = socket.gethostname()
