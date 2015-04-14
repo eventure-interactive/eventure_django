@@ -178,21 +178,12 @@ class EventGuestDetail(MultipleFieldLookupMixin, generics.RetrieveUpdateDestroyA
     serializer_class = EventGuestUpdateSerializer
     lookup_fields = ('event_id', 'guest_id')
 
-    def perform_udpate(self, serializer):
-        logger.debug('HERE ==========')
 
-        # event_id = self.kwargs['event_id']
-        # guest_id = self.kwargs['guest_id']
-        # # eventguest = EventGuest.objects.get()
-
-        serializer.save(event_id=event_id, guest_id=guest_id,rsvp=3)
-
-
-class EvensAroundList(generics.ListCreateAPIView):
+class EventsAroundList(generics.ListCreateAPIView):
     ''' 
     Show all events that is in a certain distance to a location 
     Example: Find events in 100 miles radius of Costa Mesa CA
-    /events_around?vicinity='costa mesa CA'&miles=100
+    /events_around?vicinity='costa mesa'&miles=100
     '''
     URL_PARAM_VICINITY = 'vicinity'
     URL_PARAM_MILES    = 'miles'

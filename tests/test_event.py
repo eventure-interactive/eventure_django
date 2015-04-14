@@ -82,15 +82,18 @@ class EventTests(APITestCase):
 
 		response = self.client.post(url, data, format='json')
 		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-
+		album_url = response.data['albums'][0]
+		
 
 		''' Invite guest'''
 		event_id = response.data['id']
 		url = reverse('eventguest-list', kwargs={'event_id': event_id})
 		data = {
+			'event': reverse('event-detail', kwargs={'pk': event_id}),
 			'guest': reverse('account-detail', kwargs={'pk': self.user2.id}), 
 		}
 		response = self.client.post(url, data, format='json')
+		
 		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
 	
@@ -102,4 +105,20 @@ class EventTests(APITestCase):
 		
 		response = self.client.get(url)
 		self.assertEqual(response.data['count'], 1)
+
+		''' Upload file to event album '''
+		response = self.client.get(album_url)
+		files_url = response.data['files']
+		
+		data = {
+			'source_url': '''https://upload.wikimedia.org/wikipedia/commons/8/84/Goiaba_vermelha.jpg'''
+		}
+		response = self.client.post(files_url, data, format='json')
+		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+		photos = AlbumFile.objects.all()
+		self.assertTrue(len(photos) > 0)
+		# print(photos[0].status)
+		# print(photos[0].tmp_filename)
+		# response = self.client.get(files_url)
+		# print(response.data)
 
