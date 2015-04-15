@@ -5,6 +5,7 @@ virtualenv = /home/ubuntu/evti/
 env = DJANGO_SETTINGS_MODULE=evtidj.settingsprod
 wsgi-file = evtidj/wsgi.py
 master = true
-processes = 10
-#threads = 4
-stats = /tmp/evtistats.sock
+processes = 3
+gevent=50
+stats = 127.0.0.1:9191
+
