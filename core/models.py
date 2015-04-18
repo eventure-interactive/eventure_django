@@ -271,6 +271,14 @@ class Thumbnail(models.Model):
         return self.name
 
 class Event(models.Model):
+    PUBLIC = 1
+    PRIVATE = 2
+    
+    PRIVACY_CHOICES = (
+        (PUBLIC, 'Public'),
+        (PRIVATE, 'Private'),
+    )
+
     created = models.DateTimeField(auto_now_add=True)
     modified = models.DateTimeField(auto_now=True)
 
@@ -280,6 +288,8 @@ class Event(models.Model):
     owner = models.ForeignKey('Account', related_name='events')
     guests = models.ManyToManyField('Account', through='EventGuest')
     
+    privacy = models.SmallIntegerField(choices=PRIVACY_CHOICES, default=PUBLIC)
+
     location = models.CharField(max_length=250, null=True)
     lon = models.FloatField(null=True)
     lat = models.FloatField(null=True)

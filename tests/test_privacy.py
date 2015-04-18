@@ -14,7 +14,18 @@ from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import D
 from geopy.geocoders import GoogleV3
 import time
-class EventTests(APITestCase):
+class PrivacyTests(APITestCase):
+	"""
+	Permission Rules:
+	+ Event: 
+		= Public: all can read, only owner can write
+		= Private: only owner or guests can read/write
+	+ EventGuest: inherit from its Event
+	+ Album: 
+		= Event Album: inherit from its Event, guest, owner can post media
+		= Non Event Album: only owner can read/write/create
+	+ AlbumFile: inherit from its Album, 
+	"""
 	def setUp(self):
 		# create new user account
 	    self.user = Account.objects.create(phone='+17146032364', name='Henry', password='testing')
@@ -24,10 +35,14 @@ class EventTests(APITestCase):
 	    self.user2.save()
 
 	    self._add_required_data()
-	    # log in
+	    # user log in
 	    self.user = Account.objects.get(phone='+17146032364')
 	    self.client = APIClient()
 	    self.client.force_authenticate(user=self.user)
+
+	    self.user2 = Account.objects.get(phone='+17148885070')
+	    self.client2 = APIClient()
+	    self.client2.force_authenticate(user=self.user2)
 
 	def _add_required_data(self):
 		''' Some operations need a certain data '''
@@ -35,76 +50,23 @@ class EventTests(APITestCase):
 		event_album_type = AlbumType.objects.create(id=5, name='DEFAULT_EVENT', description='Default event album', is_deletable=False, is_virtual=False, sort_order=60)
 		event_album_type.save()
 
-	def test_create_event_start_date_in_the_future(self):
-	    '''
-	    Ensure event createion with start date in the past (compared to current UTC time) will fail
-	    '''
+	def testEventPrivacy(self):
 
-	    # response = self.client.get('/api/albums/')
-	    
-	    url = reverse('event-list')
-	    data = {'title': 'Test Event 1',
-	    	'start'	: "2015-04-07T17:04:00Z",
-	    	'end'	: "2015-04-07T17:04:00Z"}
-	    response = self.client.post(url, data, format='json')
-	    
-	    self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-	    self.assertIn('Start Date must not be in the past', response.data['start'])
-
-	def test_create_event_end_date_later_than_start_date(self):
-		'''
-		Ensure if end date is ealier than start date, test will fail
-		'''
+		''' Create event '''
 		url = reverse('event-list')
 
 		now = timezone.now()
-		data = {'title': 'Test Event 2',
-			'start'	: now.strftime("%Y-%m-%dT%H:%M:%SZ"),
-			'end'	: (now - datetime.timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")}
-
-		response = self.client.post(url, data, format='json')
-
-		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-
-	def test_create_event_success_add_guest_find_events(self):
-		'''
-		Ensure test created successful
-		'''
-		# Create event
-		url = reverse('event-list')
-
-		now = timezone.now()
-		data = {'title': 'Test Event 3',
+		data = {'title': 'Private Test Event',
 			'start'	: (now + datetime.timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
 			'end'	: (now + datetime.timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
 			'location': '3420 Bristol Street, Costa Mesa, CA 92626',
+			'privacy': 2, # PRIVATE
 			}
 
 		response = self.client.post(url, data, format='json')
 		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 		album_url = response.data['albums'][0]
-		
-
-		''' Invite guest'''
 		event_id = response.data['id']
-		url = reverse('eventguest-list', kwargs={'event_id': event_id})
-		data = {
-			'event': reverse('event-detail', kwargs={'pk': event_id}),
-			'guest': reverse('account-detail', kwargs={'pk': self.user2.id}), 
-		}
-		response = self.client.post(url, data, format='json')
-		
-		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-
-	
-		''' Find all events in a radius of 100 miles of a random location '''
-		url = reverse('events_around') 
-		miles = '100'
-		vicinity = 'costa mesa'
-		url += '?miles=%s&vicinity=%s'%(miles, vicinity)
-		
-		response = self.client.get(url)
-		self.assertEqual(response.data['count'], 1)
 
 		''' Upload file to event album '''
 		response = self.client.get(album_url)
@@ -114,12 +76,20 @@ class EventTests(APITestCase):
 			'source_url': '''https://upload.wikimedia.org/wikipedia/commons/8/84/Goiaba_vermelha.jpg'''
 		}
 		response = self.client.post(files_url, data, format='json')
-		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-		photos = AlbumFile.objects.all()
-		self.assertTrue(len(photos) > 0)
-		
-		# print(photos[0].status)
-		# print(photos[0].tmp_filename)
-		# response = self.client.get(files_url)
-		# print(response.data)
+		file_url = response.data['url']
 
+		# print(file_url)
+		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+		''' User2 cannot access event, album, albumfile since its private '''
+		url = reverse('event-detail', kwargs={'pk': event_id })
+		response = self.client2.get(url)
+		self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+		response = self.client2.get(album_url)
+		self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+		# NEED TO FIX UPLOAD FILE PROBLEM
+		# response = self.client2.get(file_url)
+		# print(response.data)
+		# self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

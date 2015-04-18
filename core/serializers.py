@@ -16,7 +16,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 class AccountSerializer(serializers.HyperlinkedModelSerializer):
-
     class Meta:
         model = Account
         fields = ('url', 'name')
@@ -73,8 +72,8 @@ class AlbumFileSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = AlbumFile
         fields = ('url', 'name', 'description', 'file_url', 'width', 'height', 'size_bytes', 'thumbnails',
-                  'source_url', 'source_file')
-        read_only_fields = ('width', 'height', 'size_bytes', 'file_url')
+                  'source_url', 'source_file', 'albums', 'owner')
+        read_only_fields = ('width', 'height', 'size_bytes', 'file_url', 'albums', 'owner')
 
     def validate_source_url(self, data):
         """Validate that the url contains an image or video.
@@ -195,6 +194,7 @@ class AlbumFileSerializer(serializers.HyperlinkedModelSerializer):
             return af
 
 class EventSerializer(serializers.HyperlinkedModelSerializer):
+
     owner = serializers.HyperlinkedRelatedField(read_only=True, view_name='account-detail')
     albums = serializers.HyperlinkedRelatedField(many=True, view_name='album-detail', read_only=True)
     guests = serializers.HyperlinkedRelatedField(many=True, view_name='account-detail', read_only=True)
@@ -203,7 +203,7 @@ class EventSerializer(serializers.HyperlinkedModelSerializer):
 
     class Meta:
         model = Event 
-        fields = ('id', 'url', 'title', 'start', 'end', 'owner', 'guests', 'albums', 'location', 'lat', 'lon')
+        fields = ('id', 'url', 'title', 'start', 'end', 'owner', 'guests', 'albums', 'location', 'lat', 'lon', 'privacy')
 
     def validate(self, data): 
         ''' End Date must be later than Start Date '''
@@ -236,12 +236,19 @@ class AlbumSerializer(serializers.HyperlinkedModelSerializer):
 
     album_type = AlbumTypeSerializer(read_only=True, default=AlbumType.objects.get(name='CUSTOM'))
     files = serializers.HyperlinkedIdentityField(view_name='albumfiles-list')
-    event = serializers.HyperlinkedRelatedField(queryset=Event.objects.all(), view_name='event-detail', allow_null=True)
-    owner = serializers.HiddenField(default=serializers.CurrentUserDefault())
+    event = serializers.HyperlinkedRelatedField(queryset=Event.objects.all(), view_name='event-detail', allow_null=True,)
+    # owner = serializers.HiddenField(default=serializers.CurrentUserDefault())
+    owner = serializers.HyperlinkedRelatedField(read_only=True, view_name='account-detail', default=serializers.CurrentUserDefault())
 
     class Meta:
         model = Album
-        fields = ('id', 'url', 'name', 'description', 'album_type', 'files', 'event', 'owner') #owner
+        fields = ('id', 'url', 'name', 'description', 'album_type', 'files', 'event', 'owner')
+
+    def validate_event(self, value):
+        ''' ONLY OWNER OF EVENT SHOULD BE ABLE TO CREATE EVENT ALBUM '''
+        if value is not None and value.owner != self.context['request'].user:
+            raise serializers.ValidationError('Cannot create album for event that you do not own')
+        return value
 
 class AlbumUpdateSerializer(AlbumSerializer):
     ''' When updating album, should not allow update event '''
