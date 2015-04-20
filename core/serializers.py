@@ -15,11 +15,6 @@ from .tasks import store_albumfile_and_thumbnails_s3
 import logging
 logger = logging.getLogger(__name__)
 
-class AccountSerializer(serializers.HyperlinkedModelSerializer):
-    class Meta:
-        model = Account
-        fields = ('url', 'name')
-
 
 class ThumbnailSerializer(serializers.ModelSerializer):
 
@@ -193,6 +188,14 @@ class AlbumFileSerializer(serializers.HyperlinkedModelSerializer):
             store_albumfile_and_thumbnails_s3(af.id)  # Async task
             return af
 
+
+class AccountSerializer(serializers.HyperlinkedModelSerializer):
+
+    class Meta:
+        model = Account
+        fields = ('url', 'name', 'profile_albumfile',)
+
+
 class EventSerializer(serializers.HyperlinkedModelSerializer):
 
     owner = serializers.HyperlinkedRelatedField(read_only=True, view_name='account-detail')
@@ -215,8 +218,6 @@ class EventSerializer(serializers.HyperlinkedModelSerializer):
         if value < timezone.now():
             raise serializers.ValidationError('Start Date must not be in the past')
         return value
-    
-
 
 
 class EventGuestSerializer(serializers.HyperlinkedModelSerializer):

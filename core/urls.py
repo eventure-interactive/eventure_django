@@ -13,8 +13,10 @@ urlpatterns = [
     url(r'^events/$', views.EventList.as_view(), name='event-list'),
     url(r'^events/(?P<pk>[0-9]+)/$', views.EventDetail.as_view(), name='event-detail'),
     url(r'^events/(?P<event_id>[0-9]+)/guests/$', views.EventGuestList.as_view(), name='eventguest-list'),
-    url(r'^events/(?P<event_id>[0-9]+)/guests/(?P<guest_id>[0-9]+)/$', views.EventGuestDetail.as_view(), name='eventguest-detail'),
-    url(r'^events_around/$', views.EventsAroundList.as_view(), name='events_around')
+    url(r'^events/(?P<event_id>[0-9]+)/guests/(?P<guest_id>[0-9]+)/$', views.EventGuestDetail.as_view(),
+        name='eventguest-detail'),
+    url(r'^events_around/$', views.EventsAroundList.as_view(), name='events_around'),
+    url(r'^self/$', views.AccountSelfDetail.as_view(), name='self-detail'),
 ]
 
 urlpatterns = format_suffix_patterns(urlpatterns)

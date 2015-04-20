@@ -28,6 +28,7 @@ def api_root(request, format=None):
         'accounts': reverse('account-list', request=request, format=format),
         'albums': reverse('album-list', request=request, format=format),
         'events': reverse('event-list', request=request, format=format),
+        'self': reverse('self-detail', request=request, format=format),
     })
 
 
@@ -54,11 +55,23 @@ class AccountList(generics.ListAPIView):
     permission_classes = (permissions.IsAuthenticated, )
 
 
-class AccountDetail(generics.RetrieveUpdateAPIView):
+class AccountDetail(generics.RetrieveAPIView):
     "Show detailed information for the given account."
     queryset = Account.objects.all()
     serializer_class = AccountSerializer
-    permission_classes = (permissions.IsAuthenticated, IsAccountOwnerOrReadOnly)
+    permission_classes = (permissions.IsAuthenticated, )
+
+
+class AccountSelfDetail(generics.RetrieveUpdateAPIView):
+    "Show account information for the logged-in user."
+
+    serializer_class = AccountSerializer
+    permission_classes = (permissions.IsAuthenticated, )
+    queryset = Account.objects.filter(status=Account.ACTIVE)
+
+    def get_object(self):
+        qs = self.get_queryset()
+        return get_object_or_404(qs, id=self.request.user.id)
 
 
 class AlbumList(generics.ListCreateAPIView):
@@ -94,7 +107,7 @@ class AlbumDetail(generics.RetrieveUpdateDestroyAPIView):
 
 class AlbumFileDetail(generics.RetrieveUpdateAPIView):
 
-    queryset = AlbumFile.active.all()
+    queryset = AlbumFile.active.all().prefetch_related('thumbnails', 'albums')
     serializer_class = AlbumFileSerializer
     permission_classes = (permissions.IsAuthenticated, IsGrantedAccessToAlbum)  # TODO: Permissions on this
 

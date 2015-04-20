@@ -15,6 +15,7 @@ from geopy.geocoders import GoogleV3
 import logging
 logger = logging.getLogger(__name__)
 
+
 class AccountUserManager(BaseUserManager):
     use_in_migrations = True
 
@@ -64,6 +65,7 @@ class Account(AbstractBaseUser, PermissionsMixin):
     is_staff = models.BooleanField(default=False)
     modified = models.DateTimeField(auto_now=True)
     date_joined = models.DateTimeField(default=timezone.now)
+    profile_albumfile = models.ForeignKey('AlbumFile', blank=True, null=True)
 
     objects = AccountUserManager()
 
@@ -100,6 +102,7 @@ class Account(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return self.get_short_name()
+
 
 class AlbumType(models.Model):
 
@@ -271,10 +274,11 @@ class Thumbnail(models.Model):
     def __str__(self):
         return self.name
 
+
 class Event(models.Model):
     PUBLIC = 1
     PRIVATE = 2
-    
+
     PRIVACY_CHOICES = (
         (PUBLIC, 'Public'),
         (PRIVATE, 'Private'),
@@ -284,11 +288,11 @@ class Event(models.Model):
     modified = models.DateTimeField(auto_now=True)
 
     title = models.CharField(max_length=100,)
-    start = models.DateTimeField() #UTC start time
-    end = models.DateTimeField() #UTC end time
+    start = models.DateTimeField()  # UTC start time
+    end = models.DateTimeField()  # UTC end time
     owner = models.ForeignKey('Account', related_name='events')
     guests = models.ManyToManyField('Account', through='EventGuest')
-    
+
     privacy = models.SmallIntegerField(choices=PRIVACY_CHOICES, default=PUBLIC)
 
     location = models.CharField(max_length=250, null=True)
@@ -304,16 +308,16 @@ class Event(models.Model):
     def __str__(self):
         return "%s %s" % (self.id, self.title)
 
-    def save(self, *args, **kwargs): 
+    def save(self, *args, **kwargs):
         # Geocoding to get lat lon and update PointField on create/update
         geolocator = GoogleV3()
         loc = geolocator.geocode(self.location)
         self.lat = loc.latitude
         self.lon = loc.longitude
 
-        self.mpoint = Point(self.lon, self.lat, srid=4326) 
+        self.mpoint = Point(self.lon, self.lat, srid=4326)
         super(Event, self).save(*args, **kwargs)
-        
+
 
 class EventGuest(models.Model):
     UNDECIDED = 0
@@ -335,9 +339,5 @@ class EventGuest(models.Model):
     event = models.ForeignKey('Event')
     rsvp = models.SmallIntegerField(choices=RSVP_CHOICES, default=UNDECIDED)
 
-    
-
     class Meta:
         unique_together = ("guest", "event")
-
-
