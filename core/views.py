@@ -9,8 +9,10 @@ from rest_framework.response import Response
 from rest_framework.reverse import reverse
 from rest_framework.views import APIView
 from core.models import Account, Album, AlbumType, AlbumFile, Event, EventGuest
-from core.serializers import AccountSerializer, AlbumSerializer, AlbumFileSerializer, EventSerializer, EventGuestSerializer, EventGuestUpdateSerializer, AlbumUpdateSerializer
-from core.permissions import IsAccountOwnerOrReadOnly, IsAlbumOwnerAndDeleteCustom, IsOwner, IsEventOwnerOrReadOnly, IsAlbumUploadableOrReadOnly, IsGrantedAccessToEvent, IsGrantedAccessToAlbum
+from core.serializers import AccountSerializer, AlbumSerializer, AlbumFileSerializer, EventSerializer, \
+    EventGuestSerializer, EventGuestUpdateSerializer, AlbumUpdateSerializer
+from core.permissions import IsAccountOwnerOrReadOnly, IsAlbumOwnerAndDeleteCustom, IsOwner, IsEventOwnerOrReadOnly, \
+    IsAlbumUploadableOrReadOnly, IsGrantedAccessToEvent, IsGrantedAccessToAlbum
 from django.db.models import Q
 from django.utils.translation import ugettext as _
 from django.contrib.gis.geos import Point
@@ -19,14 +21,15 @@ from django.contrib.gis.measure import D
 import logging
 logger = logging.getLogger(__name__)
 
+
 @api_view(('GET',))
 def api_root(request, format=None):
     return Response({
         'accounts': reverse('account-list', request=request, format=format),
         'albums': reverse('album-list', request=request, format=format),
         'events': reverse('event-list', request=request, format=format),
-        # 'guests': reverse('eventguest-list', request=request, format=format),
     })
+
 
 class MultipleFieldLookupMixin(object):
     """
@@ -42,6 +45,7 @@ class MultipleFieldLookupMixin(object):
         obj = get_object_or_404(queryset, **filter)
         self.check_object_permissions(self.request, obj)
         return obj
+
 
 class AccountList(generics.ListAPIView):
     "Provides a list of active Accounts."
@@ -63,8 +67,9 @@ class AlbumList(generics.ListCreateAPIView):
     def get_queryset(self):
         ''' Include only albums user owns or event albums that user owns or guest of'''
         user = self.request.user
-        return Album.active.filter(Q(owner=user) | Q(event__owner=user) | Q(event__eventguest__guest=user)).select_related('album_type').distinct()  # TODO: will need to add in Event albums
-
+        return Album.active.filter(Q(owner=user)
+                                   | Q(event__owner=user)
+                                   | Q(event__eventguest__guest=user)).select_related('album_type').distinct()
 
     def perform_create(self, serializer):
         # If event is specified, AlbumType is set to DEFAULT_EVENT, else AlbumType is CUSTOM
@@ -72,24 +77,16 @@ class AlbumList(generics.ListCreateAPIView):
         if not event:
             custom_type = AlbumType.objects.get(name='CUSTOM')
             serializer.save(album_type=custom_type)
-        else: 
+        else:
             event_album_type = AlbumType.objects.get(name='DEFAULT_EVENT')
             serializer.save(album_type=event_album_type)
-        
+
     serializer_class = AlbumSerializer
     permission_classes = (permissions.IsAuthenticated,)
 
 
 class AlbumDetail(generics.RetrieveUpdateDestroyAPIView):
 
-    # def get_queryset(self):
-    #     # return Album.active.filter(owner=self.request.user).select_related('album_type')
-
-    # def get_object(self):
-    #     album = super().get_object()
-    #     self.check_object_permissions(self.request, album)
-    #     album.files = list(album.albumfiles_queryset(self.request.user))
-    #     return album
     queryset = Album.active.all()
     serializer_class = AlbumUpdateSerializer
     permission_classes = (permissions.IsAuthenticated,  IsGrantedAccessToAlbum)
@@ -104,10 +101,11 @@ class AlbumFileDetail(generics.RetrieveUpdateAPIView):
     def get_object(self):
         queryset = self.filter_queryset(self.get_queryset())
         filter_kwargs = {'pk': self.kwargs['pk']}
-        albumfile = get_object_or_404(queryset,**filter_kwargs)
+        albumfile = get_object_or_404(queryset, **filter_kwargs)
 
         self.check_object_permissions(self.request, albumfile)
         return albumfile
+
 
 class AlbumFilesList(generics.ListCreateAPIView):
     "List the files in the album."
@@ -116,7 +114,7 @@ class AlbumFilesList(generics.ListCreateAPIView):
     serializer_class = AlbumFileSerializer
 
     def get_serializer_context(self):
-        context = super().get_serializer_context()
+        context = super(AlbumFilesList, self).get_serializer_context()
         context['album'] = self.get_album()
         return context
 
@@ -136,7 +134,7 @@ class AlbumFilesList(generics.ListCreateAPIView):
 class EventList(generics.ListCreateAPIView):
     ''' Show all public events or private events that you are member (guest or own) '''
 
-    permission_classes = (permissions.IsAuthenticatedOrReadOnly,)
+    permission_classes = (permissions.IsAuthenticated,)
 
     queryset = Event.objects.all()
     serializer_class = EventSerializer
@@ -145,45 +143,34 @@ class EventList(generics.ListCreateAPIView):
         instance = serializer.save(owner=self.request.user)
 
         # create a default album
-        new_album = Album.objects.create( 
-            owner=self.request.user, 
-            event=instance, 
-            name='%s Album' % (instance.title), 
-            description='Default Album for Event', 
-            album_type=AlbumType.objects.get(name="DEFAULT_EVENT"))   
+        new_album = Album.objects.create(
+            owner=self.request.user,
+            event=instance,
+            name='%s Album' % (instance.title),
+            description='Default Album for Event',
+            album_type=AlbumType.objects.get(name="DEFAULT_EVENT"))
         new_album.save()
-    
+
     def get_queryset(self):
         ''' No private events that user dont own or guest of should be shown '''
-        return Event.objects.exclude( Q(privacy=Event.PRIVATE) , (~Q(owner=self.request.user) & ~Q(eventguest__guest=self.request.user)) )
-        
+        owner_guest = ~Q(owner=self.request.user) & ~Q(eventguest__guest=self.request.user)
+        return Event.objects.exclude(Q(privacy=Event.PRIVATE), owner_guest)
+
 
 class EventDetail(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = (permissions.IsAuthenticatedOrReadOnly,
-                            IsGrantedAccessToEvent,)
+    permission_classes = (permissions.IsAuthenticatedOrReadOnly, IsGrantedAccessToEvent,)
 
     queryset = Event.objects.all()
     serializer_class = EventSerializer
 
 
-
 class EventGuestList(generics.ListCreateAPIView):
     permission_classes = (permissions.IsAuthenticatedOrReadOnly, IsGrantedAccessToEvent,)
 
-    queryset = EventGuest.objects.all() # EventGuest.objects.none() 
+    queryset = EventGuest.objects.all()  # EventGuest.objects.none()
     serializer_class = EventGuestSerializer
     paginate_by = 20
-    
-    # def perform_create(self, serializer):
-    #     event_id = self.kwargs['event_id']
-    #     event = Event.objects.get(pk=event_id)
-    #     serializer.save(event=event)
-    
-    # def get_queryset(self):
-    #     event_id = self.kwargs['event_id']
-    #     guests = EventGuest.objects.filter(event=event_id)
-    #     return guests
-    
+
     def get_serializer_context(self):
         context = super().get_serializer_context()
         context['event'] = self.get_event()
@@ -201,9 +188,10 @@ class EventGuestList(generics.ListCreateAPIView):
         self.check_object_permissions(self.request, event)
         return EventGuest.objects.filter(event=event)
 
+
 class EventGuestDetail(MultipleFieldLookupMixin, generics.RetrieveUpdateDestroyAPIView):
     permission_classes = (permissions.IsAuthenticatedOrReadOnly,
-                            IsGrantedAccessToEvent,)
+                          IsGrantedAccessToEvent,)
 
     queryset = EventGuest.objects.all()
     serializer_class = EventGuestUpdateSerializer
@@ -211,8 +199,8 @@ class EventGuestDetail(MultipleFieldLookupMixin, generics.RetrieveUpdateDestroyA
 
 
 class EventsAroundList(generics.ListCreateAPIView):
-    ''' 
-    Show all events that is in a certain distance to a location 
+    '''
+    Show all events that is in a certain distance to a location
     Example: Find events in 100 miles radius of Costa Mesa CA
     /events_around?vicinity='costa mesa'&miles=100
     '''
@@ -233,7 +221,6 @@ class EventsAroundList(generics.ListCreateAPIView):
         events = Event.objects.filter(mpoint__dwithin=(point, D(mi=miles)))
         # privacy contraints
         # No private events what user dont own or guest of should be shown
-        events = events.exclude( Q(privacy=Event.PRIVATE) , (~Q(owner=self.request.user) & ~Q(eventguest__guest=self.request.user)) )
+        events = events.exclude(Q(privacy=Event.PRIVATE),
+                                ~Q(owner=self.request.user) & ~Q(eventguest__guest=self.request.user))
         return events
-
-

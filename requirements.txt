@@ -15,4 +15,4 @@ requests
 Pillow
 celery[redis]
 django-celery
-
+six

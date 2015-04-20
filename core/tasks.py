@@ -81,13 +81,14 @@ def store_thumbnail_s3(main_s3_key, albumfile_id, size):
         img.save(img_f, 'JPEG')
         img_f.flush()
         url = _do_upload_s3(img_f.name, settings.S3_MEDIA_UPLOAD_BUCKET, s3_key, reduced_redundancy=True)
+        size_bytes = os.path.getsize(img_f.name)
         thumbnail = Thumbnail(
             albumfile=af,
             file_url=url,
             size_type=size,
             width=w,
             height=h,
-            size_bytes=img_f.seek(0, 2))
+            size_bytes=size_bytes)
 
     thumbnail.save()
     return thumbnail.pk

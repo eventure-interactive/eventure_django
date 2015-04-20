@@ -1,4 +1,4 @@
-from urllib.parse import unquote
+from six.moves.urllib.parse import unquote
 import phonenumbers
 # from django.db import models
 
@@ -123,14 +123,15 @@ class ActiveStatusManager(models.Manager):
     "Return only items where the status is ACTIVE."
 
     def get_queryset(self):
-        return super().get_queryset().filter(status=self.model.ACTIVE)
+        return super(ActiveStatusManager, self).get_queryset().filter(status=self.model.ACTIVE)
 
 
 class ActiveProcessingStatusManager(models.Manager):
     "Return only items where the status is ACTIVE or PROCESSING"
 
     def get_queryset(self):
-        return super().get_queryset().filter(status__in=(self.model.ACTIVE, self.model.PROCESSING))
+        return super(ActiveStatusManager, self).get_queryset()\
+            .filter(status__in=(self.model.ACTIVE, self.model.PROCESSING))
 
 
 class AlbumFile(models.Model):

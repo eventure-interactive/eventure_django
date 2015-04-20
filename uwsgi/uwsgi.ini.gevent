@@ -1,15 +1,11 @@
 [uwsgi]
-socket = /tmp/evti0.sock
-socket = /tmp/evti1.sock
-socket = /tmp/evti2.sock
-socket = /tmp/evti3.sock
-
+socket = /tmp/evti.sock
 chdir = /home/ubuntu/eventure-backend-small/
 virtualenv = /home/ubuntu/evti/
 env = DJANGO_SETTINGS_MODULE=evtidj.settingsprod
 wsgi-file = evtidj/wsgi.py
 master = true
-processes = 8
-# threads = 3
+processes = 3
+gevent=50
+stats = 127.0.0.1:9191
 
-stats = /tmp/evtistats.sock
