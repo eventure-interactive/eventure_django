@@ -45,6 +45,8 @@ INSTALLED_APPS = (
 
     'rest_framework',
     'core',
+
+    'django.contrib.gis',
 )
 
 MIDDLEWARE_CLASSES = (
@@ -84,9 +86,11 @@ WSGI_APPLICATION = 'evtidj.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        # 'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        'ENGINE': 'django.contrib.gis.db.backends.postgis',
         'NAME': 'evti',
-        'USER': 'web-dev',
+        # 'USER': 'web-dev' ,
+        'USER': 'evtipgmaster',
         'PASSWORD': '1Billion',
         'HOST': 'pgdb-dev.eventure.com',
         'PORT': 5432,
@@ -117,6 +121,40 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 25,
 }
 
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format' : "[%(asctime)s] %(levelname)s [%(name)s:%(lineno)s] %(message)s",
+            'datefmt' : "%d/%b/%Y %H:%M:%S"
+        },
+        'simple': {
+            'format': '%(levelname)s %(message)s'
+        },
+    },
+    'handlers': {
+        'file': {
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'filename': 'log.log',
+            'formatter': 'verbose'
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers':['file'],
+            'propagate': True,
+            'level':'DEBUG',
+        },
+        'core': {
+            'handlers': ['file'],
+            'level': 'DEBUG',
+        },
+    }
+}
+
 # Celery config
 
 CELERY_RESULT_BACKEND = 'djcelery.backends.database:DatabaseBackend'
@@ -139,3 +177,4 @@ S3_MEDIA_REGION = 'us-east-1'
 
 TEMP_ALBUMFILE_DIR = os.path.join(BASE_DIR, 'albumfile_tmp')
 HOST_NAME = socket.gethostname()
+

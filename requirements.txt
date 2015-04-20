@@ -9,6 +9,7 @@ djangorestframework
 phonenumbers
 psycopg2
 pytz
+geopy
 boto
 requests
 Pillow

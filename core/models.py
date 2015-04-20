@@ -1,12 +1,19 @@
 from six.moves.urllib.parse import unquote
 import phonenumbers
-from django.db import models
-from django.core.validators import RegexValidator
+# from django.db import models
+
+from django.core.validators import RegexValidator, MinValueValidator, MaxValueValidator
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
 from django.contrib.postgres.fields import HStoreField
 from django.utils import timezone
 from django.utils.translation import ugettext_lazy as _
+from django.core.exceptions import ValidationError
+from django.contrib.gis.db import models
+from django.contrib.gis.geos import Point
+from geopy.geocoders import GoogleV3
 
+import logging
+logger = logging.getLogger(__name__)
 
 class AccountUserManager(BaseUserManager):
     use_in_migrations = True
@@ -91,6 +98,8 @@ class Account(AbstractBaseUser, PermissionsMixin):
 
         return phonenumbers.format_number(pn, phonenumbers.PhoneNumberFormat.E164)
 
+    def __str__(self):
+        return self.get_short_name()
 
 class AlbumType(models.Model):
 
@@ -195,7 +204,7 @@ class Album(models.Model):
     active = ActiveStatusManager()
 
     owner = models.ForeignKey('Account', related_name='albums')  # This is the owner of the album
-    # event = models.ForeignKey('Event')
+    event = models.ForeignKey('Event', related_name='albums', null=True, blank=True, default=None)
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     album_type = models.ForeignKey('AlbumType')
@@ -261,3 +270,74 @@ class Thumbnail(models.Model):
 
     def __str__(self):
         return self.name
+
+class Event(models.Model):
+    PUBLIC = 1
+    PRIVATE = 2
+    
+    PRIVACY_CHOICES = (
+        (PUBLIC, 'Public'),
+        (PRIVATE, 'Private'),
+    )
+
+    created = models.DateTimeField(auto_now_add=True)
+    modified = models.DateTimeField(auto_now=True)
+
+    title = models.CharField(max_length=100,)
+    start = models.DateTimeField() #UTC start time
+    end = models.DateTimeField() #UTC end time
+    owner = models.ForeignKey('Account', related_name='events')
+    guests = models.ManyToManyField('Account', through='EventGuest')
+    
+    privacy = models.SmallIntegerField(choices=PRIVACY_CHOICES, default=PUBLIC)
+
+    location = models.CharField(max_length=250, null=True)
+    lon = models.FloatField(null=True)
+    lat = models.FloatField(null=True)
+    mpoint = models.PointField(null=True, geography=True)
+
+    objects = models.GeoManager()
+
+    class Meta:
+        ordering = ('created',)
+
+    def __str__(self):
+        return "%s %s" % (self.id, self.title)
+
+    def save(self, *args, **kwargs): 
+        # Geocoding to get lat lon and update PointField on create/update
+        geolocator = GoogleV3()
+        loc = geolocator.geocode(self.location)
+        self.lat = loc.latitude
+        self.lon = loc.longitude
+
+        self.mpoint = Point(self.lon, self.lat, srid=4326) 
+        super(Event, self).save(*args, **kwargs)
+        
+
+class EventGuest(models.Model):
+    UNDECIDED = 0
+    YES = 1
+    NO  = 2
+    MAYBE = 3
+
+    RSVP_CHOICES = (
+        (UNDECIDED, 'Undecided'),
+        (YES, 'Yes'),
+        (NO, 'No'),
+        (MAYBE, 'Maybe')
+    )
+
+    created = models.DateTimeField(auto_now_add=True)
+    modified = models.DateTimeField(auto_now=True)
+
+    guest = models.ForeignKey('Account', related_name='guests')
+    event = models.ForeignKey('Event')
+    rsvp = models.SmallIntegerField(choices=RSVP_CHOICES, default=UNDECIDED)
+
+    
+
+    class Meta:
+        unique_together = ("guest", "event")
+
+
