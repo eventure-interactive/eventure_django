@@ -17,11 +17,18 @@
 # Please see /usr/share/doc/nginx-doc/examples/ for more detailed examples.
 ##
 
+upstream django {
+	server unix:///tmp/evti0.sock;
+	server unix:///tmp/evti1.sock;
+	server unix:///tmp/evti2.sock;
+	server unix:///tmp/evti2.sock;
+}
+
 server {
 	listen 80 default_server;
 	listen [::]:80 default_server ipv6only=on;
 
-
+	client_max_body_size 15m;
 	server_name devapi-rest.eventure.com;
 	
 	location /static/ {
@@ -30,7 +37,7 @@ server {
 
 	location / {
 		include uwsgi_params;
-		uwsgi_pass unix:///tmp/evti.sock;
+		uwsgi_pass django;
 	}
 
 	# Only for nginx-naxsi used with nginx-naxsi-ui : process denied requests
@@ -47,20 +54,6 @@ server {
 	#	root /usr/share/nginx/html;
 	#}
 
-	# pass the PHP scripts to FastCGI server listening on 127.0.0.1:9000
-	#
-	#location ~ \.php$ {
-	#	fastcgi_split_path_info ^(.+\.php)(/.+)$;
-	#	# NOTE: You should have "cgi.fix_pathinfo = 0;" in php.ini
-	#
-	#	# With php5-cgi alone:
-	#	fastcgi_pass 127.0.0.1:9000;
-	#	# With php5-fpm:
-	#	fastcgi_pass unix:/var/run/php5-fpm.sock;
-	#	fastcgi_index index.php;
-	#	include fastcgi_params;
-	#}
-
 	# deny access to .htaccess files, if Apache's document root
 	# concurs with nginx's one
 	#
@@ -68,21 +61,6 @@ server {
 	#	deny all;
 	#}
 }
-
-
-# another virtual host using mix of IP-, name-, and port-based configuration
-#
-#server {
-#	listen 8000;
-#	listen somename:8080;
-#	server_name somename alias another.alias;
-#	root html;
-#	index index.html index.htm;
-#
-#	location / {
-#		try_files $uri $uri/ =404;
-#	}
-#}
 
 
 # HTTPS server
