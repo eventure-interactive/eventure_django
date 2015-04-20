@@ -148,8 +148,6 @@ class EventList(generics.ListCreateAPIView):
     ''' Show all public events or private events that you are member (guest or own) '''
 
     permission_classes = (permissions.IsAuthenticated,)
-
-    queryset = Event.objects.all()
     serializer_class = EventSerializer
 
     def perform_create(self, serializer):
@@ -166,14 +164,16 @@ class EventList(generics.ListCreateAPIView):
 
     def get_queryset(self):
         ''' No private events that user dont own or guest of should be shown '''
+
         owner_guest = ~Q(owner=self.request.user) & ~Q(eventguest__guest=self.request.user)
-        return Event.objects.exclude(Q(privacy=Event.PRIVATE), owner_guest)
+        qs = Event.objects.exclude(Q(privacy=Event.PRIVATE), owner_guest)
+        return qs.prefetch_related('albums', 'guests')
 
 
 class EventDetail(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = (permissions.IsAuthenticatedOrReadOnly, IsGrantedAccessToEvent,)
 
-    queryset = Event.objects.all()
+    queryset = Event.objects.all().select_related('owner')
     serializer_class = EventSerializer
 
 
