@@ -1,10 +1,7 @@
-from datetime import datetime
 import os
 import tempfile
 from six.moves.urllib.parse import unquote
-import uuid
 from django.conf import settings
-from django.forms import widgets
 from django.utils.translation import ugettext as _
 from PIL import Image
 from rest_framework import serializers
@@ -14,6 +11,7 @@ import requests
 from .tasks import store_albumfile_and_thumbnails_s3
 import logging
 logger = logging.getLogger(__name__)
+
 
 class AccountSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
@@ -193,6 +191,7 @@ class AlbumFileSerializer(serializers.HyperlinkedModelSerializer):
             store_albumfile_and_thumbnails_s3(af.id)  # Async task
             return af
 
+
 class EventSerializer(serializers.HyperlinkedModelSerializer):
 
     owner = serializers.HyperlinkedRelatedField(read_only=True, view_name='account-detail')
@@ -202,35 +201,44 @@ class EventSerializer(serializers.HyperlinkedModelSerializer):
     lon = serializers.FloatField(allow_null=True, read_only=True)
 
     class Meta:
-        model = Event 
+        model = Event
         fields = ('id', 'url', 'title', 'start', 'end', 'owner', 'guests', 'albums', 'location', 'lat', 'lon', 'privacy')
 
-    def validate(self, data): 
+    def validate(self, data):
         ''' End Date must be later than Start Date '''
         if data['start'] > data['end']:
             raise serializers.ValidationError('End Date must be later than Start Date')
         return data
-    def validate_start(self, value): 
+
+    def validate_start(self, value):
         ''' Start date must be in future '''
         if value < timezone.now():
             raise serializers.ValidationError('Start Date must not be in the past')
         return value
-    
-
 
 
 class EventGuestSerializer(serializers.HyperlinkedModelSerializer):
-    event = serializers.HyperlinkedRelatedField(queryset=Event.objects.all(), view_name='event-detail') #serializers.HiddenField( default=None ), )
+    event = serializers.HiddenField(default=None,)  # serializers.HyperlinkedRelatedField(read_only=True, view_name='event-detail')  
     guest = serializers.HyperlinkedRelatedField(queryset=Account.objects.all(), view_name='account-detail')
 
     class Meta:
         model = EventGuest
-        fields = ('id', 'event', 'guest' , 'rsvp')
-        
-    
-class EventGuestUpdateSerializer(EventGuestSerializer): 
+        fields = ('id', 'event', 'guest', 'rsvp')
+
+    def create(self, validated_data):
+        event = self.context['event']
+        if event:
+            guest = EventGuest.objects.create(event=event, guest=validated_data.get('guest'))
+            return guest
+
+class EventGuestUpdateSerializer(EventGuestSerializer):
     ''' to be used with Event Guest Detail view '''
     guest = serializers.HyperlinkedRelatedField(view_name='account-detail', read_only=True)
+
+    def update(self, instance, validated_data):
+        instance.rsvp = validated_data.get('rsvp')
+        instance.save()
+        return instance
 
 class AlbumSerializer(serializers.HyperlinkedModelSerializer):
 
@@ -250,7 +258,8 @@ class AlbumSerializer(serializers.HyperlinkedModelSerializer):
             raise serializers.ValidationError('Cannot create album for event that you do not own')
         return value
 
+
 class AlbumUpdateSerializer(AlbumSerializer):
     ''' When updating album, should not allow update event '''
     event = serializers.HyperlinkedRelatedField(read_only=True, view_name='event-detail', allow_null=True)
-
+# EOF
