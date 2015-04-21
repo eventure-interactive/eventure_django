@@ -185,7 +185,7 @@ class EventGuestList(generics.ListCreateAPIView):
     paginate_by = 20
 
     def get_serializer_context(self):
-        context = super().get_serializer_context()
+        context = super(EventGuestList, self).get_serializer_context()
         context['event'] = self.get_event()
         return context
 
