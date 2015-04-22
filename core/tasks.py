@@ -39,7 +39,6 @@ def store_albumfile_s3(albumfile_id):
 
     if af.file_type == AlbumFile.VIDEO_TYPE:
         raise NotImplementedError('Videos are unsupported')
-
     try:
         img = Image.open(af.tmp_filename)
     except IOError:

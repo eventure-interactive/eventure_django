@@ -4,15 +4,13 @@ from django.shortcuts import get_object_or_404
 from django.http import Http404
 from rest_framework import status, permissions, generics
 from rest_framework.decorators import api_view
-from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework.reverse import reverse
-from rest_framework.views import APIView
+
 from core.models import Account, Album, AlbumType, AlbumFile, Event, EventGuest
 from core.serializers import AccountSerializer, AlbumSerializer, AlbumFileSerializer, EventSerializer, \
     EventGuestSerializer, EventGuestUpdateSerializer, AlbumUpdateSerializer
-from core.permissions import IsAccountOwnerOrReadOnly, IsAlbumOwnerAndDeleteCustom, IsOwner, IsEventOwnerOrReadOnly, \
-    IsAlbumUploadableOrReadOnly, IsGrantedAccessToEvent, IsGrantedAccessToAlbum
+from core.permissions import IsAccountOwnerOrReadOnly, IsAlbumUploadableOrReadOnly, IsGrantedAccessToEvent, IsGrantedAccessToAlbum
 from django.db.models import Q
 from django.utils.translation import ugettext as _
 from django.contrib.gis.geos import Point
@@ -75,7 +73,7 @@ class AccountSelfDetail(generics.RetrieveUpdateAPIView):
 
 
 class AlbumList(generics.ListCreateAPIView):
-    "Shows the current account's active albums."
+    "Shows the current account's active albums and albums of events he is a guest of"
 
     def get_queryset(self):
         ''' Include only albums user owns or event albums that user owns or guest of'''
