@@ -338,7 +338,7 @@ class EventGuest(models.Model):
     event = models.ForeignKey('Event')
     rsvp = models.SmallIntegerField(choices=RSVP_CHOICES, default=UNDECIDED)
 
-    class Meta:
-        unique_together = ("guest", "event")
+    # class Meta: # comment out so event can be read-only in serializer
+    #     unique_together = ("guest", "event")
 
 # EOF

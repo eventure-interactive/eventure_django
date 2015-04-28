@@ -196,17 +196,18 @@ class EventSerializer(serializers.HyperlinkedModelSerializer):
 
     owner = serializers.HyperlinkedRelatedField(read_only=True, view_name='account-detail')
     albums = serializers.HyperlinkedRelatedField(many=True, view_name='album-detail', read_only=True)
-    guests = serializers.HyperlinkedRelatedField(many=True, view_name='account-detail', read_only=True)
+    # guests = serializers.HyperlinkedRelatedField(many=True, view_name='account-detail', read_only=True)
+    guests = serializers.HyperlinkedIdentityField(view_name='eventguest-list')
     lat = serializers.FloatField(allow_null=True, read_only=True)
     lon = serializers.FloatField(allow_null=True, read_only=True)
 
     class Meta:
         model = Event
-        fields = ('id', 'url', 'title', 'start', 'end', 'owner', 'guests', 'albums', 'location', 'lat', 'lon', 'privacy')
+        fields = ('url', 'title', 'start', 'end', 'owner', 'guests', 'albums', 'location', 'lat', 'lon', 'privacy')
 
     def validate(self, data):
         ''' End Date must be later than Start Date '''
-        if data['start'] > data['end']:
+        if data['start'] >= data['end']:
             raise serializers.ValidationError('End Date must be later than Start Date')
         return data
 
@@ -217,19 +218,50 @@ class EventSerializer(serializers.HyperlinkedModelSerializer):
         return value
 
 
+class GuestHyperlinkedIdentityField(serializers.HyperlinkedIdentityField):
+
+    def get_url(self, obj, view_name, request, format):
+        """
+        Override since default implementation does not allow for multiple lookup_fields
+        """
+        if obj.pk is None:
+            return None
+
+        return self.reverse(view_name,
+            kwargs={
+                'event_id': obj.event_id,
+                'guest_id': obj.guest_id
+            },
+            request=request,
+            format=format
+        )
+
+
 class EventGuestSerializer(serializers.HyperlinkedModelSerializer):
-    event = serializers.HiddenField(default=None,)  # serializers.HyperlinkedRelatedField(read_only=True, view_name='event-detail')  
+    event = serializers.HyperlinkedRelatedField(read_only=True, view_name='event-detail', )
+    # event = serializers.HiddenField(default=None,) 
     guest = serializers.HyperlinkedRelatedField(queryset=Account.objects.all(), view_name='account-detail')
+    url = GuestHyperlinkedIdentityField(view_name='eventguest-detail')
 
     class Meta:
         model = EventGuest
-        fields = ('id', 'event', 'guest', 'rsvp')
+        fields = ('url', 'event', 'guest', 'rsvp')
 
     def create(self, validated_data):
         event = self.context['event']
         if event:
-            guest = EventGuest.objects.create(event=event, guest=validated_data.get('guest'))
+            guest = EventGuest.objects.create(event=event, **validated_data)
             return guest
+
+    def validate(self, data):
+        ''' For creation: Unique together (event, guest). Work-around for unique_together wont work with read-only fields (need value to validate) '''
+        if self.instance is None:  # create not update
+            event = self.context.get('event')
+            guest = data.get('guest')  # or self.instance.guest
+            if EventGuest.objects.filter(event=event, guest=guest).exists():
+                raise serializers.ValidationError('Cannot add same guest to event more than once')
+        return data
+
 
 class EventGuestUpdateSerializer(EventGuestSerializer):
     ''' to be used with Event Guest Detail view '''
@@ -239,6 +271,7 @@ class EventGuestUpdateSerializer(EventGuestSerializer):
         instance.rsvp = validated_data.get('rsvp')
         instance.save()
         return instance
+
 
 class AlbumSerializer(serializers.HyperlinkedModelSerializer):
 
