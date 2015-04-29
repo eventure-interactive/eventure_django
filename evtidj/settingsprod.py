@@ -9,6 +9,8 @@ Intended for production use
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 import os
 import socket
+from six.moves.urllib.parse import quote
+from kombu import Exchange, Queue
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -117,26 +119,31 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 25,
 }
 
-# Celery config
+# These credentials are for the eventure-mediaserver-dev account
+AWS_MEDIA_ACCESS_KEY = 'AKIAIUIZFAO5NV43556Q'
+AWS_MEDIA_SECRET_KEY = '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'
+S3_MEDIA_UPLOAD_BUCKET = 'evtimedia'
+S3_MEDIA_KEY_PREFIX = 'dev/'
+S3_MEDIA_REGION = 'us-east-1'
+
 
 CELERY_RESULT_BACKEND = 'djcelery.backends.database:DatabaseBackend'
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_ACCEPT_CONTENT = ['json', 'yaml']
 CELERY_RESULT_SERIALIZER = 'json'
+
+CELERY_ENABLE_REMOTE_CONTROL = False
+CELERY_SEND_EVENTS = False
+
 CELERY_ENABLE_UTC = True
 CELERY_DISABLE_RATE_LIMITS = True
-BROKER_URL = 'redis://eventure-redis-dev.p07ryf.0001.use1.cache.amazonaws.com:6379/0'
+BROKER_URL = 'sqs://{}:{}@'.format(AWS_MEDIA_ACCESS_KEY, quote(AWS_MEDIA_SECRET_KEY, safe=''))
 BROKER_TRANSPORT_OPTIONS = {
-    'fanout_prefix': True,
-    'fanout_patterns': True,
+    'queue_name_prefix': 'dev-',
+    'visibility_timeout': 60,  # seconds
+    'wait_time_seconds': 20,   # Long-polling
 }
 
-# These credentials are for the eventure-mediaserver-dev account
-AWS_MEDIA_ACCESS_KEY = 'AKIAIUIZFAO5NV43556Q'
-AWS_MEDIA_SECRET_KEY = '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'
-S3_MEDIA_UPLOAD_BUCKET = 'eventuremember-dev'
-S3_MEDIA_REGION = 'us-east-1'
 
 TEMP_ALBUMFILE_DIR = os.path.join(BASE_DIR, 'albumfile_tmp')
 HOST_NAME = socket.gethostname()
-

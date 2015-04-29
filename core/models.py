@@ -1,5 +1,9 @@
+from datetime import datetime
 from six.moves.urllib.parse import unquote
+import uuid
+import boto
 import phonenumbers
+import mimetypes
 # from django.db import models
 
 from django.core.validators import RegexValidator, MinValueValidator, MaxValueValidator
@@ -7,6 +11,7 @@ from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseU
 from django.contrib.postgres.fields import HStoreField
 from django.utils import timezone
 from django.utils.translation import ugettext_lazy as _
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.contrib.gis.db import models
 from django.contrib.gis.geos import Point
@@ -162,7 +167,7 @@ class AlbumFile(models.Model):
     )
 
     class Meta:
-        unique_together = (("tmp_filename", "tmp_hostname"),)
+        unique_together = (("s3_bucket", "s3_key"),)
 
     objects = models.Manager()
     active = ActiveStatusManager()
@@ -178,14 +183,46 @@ class AlbumFile(models.Model):
     file_type = models.PositiveSmallIntegerField(choices=FILETYPE_CHOICES)
     status = models.SmallIntegerField(choices=STATUS_CHOICES)
     albums = models.ManyToManyField('Album', related_name='albumfiles')
-    tmp_filename = models.CharField(max_length=255, null=True)
-    tmp_hostname = models.CharField(max_length=255, null=True)
+    s3_bucket = models.CharField(max_length=255, null=True)
+    s3_key = models.CharField(max_length=255, null=True)
     created = models.DateTimeField(auto_now_add=True)
     modified = models.DateTimeField(auto_now=True)
     media_created = models.DateTimeField(null=True, blank=True)  # When the base media file was taken/created.
 
     def __str__(self):
         return self.name
+
+    def upload_s3_photo(self, file_obj, img_format):
+        "Upload a photo contained in file_obj to s3 and set the appropriate albumfile properties."
+
+        if self.file_type == AlbumFile.VIDEO_TYPE:
+            raise NotImplementedError('Videos are unsupported')
+
+        self.s3_bucket = settings.S3_MEDIA_UPLOAD_BUCKET
+        conn = boto.s3.connect_to_region(settings.S3_MEDIA_REGION,
+                                         aws_access_key_id=settings.AWS_MEDIA_ACCESS_KEY,
+                                         aws_secret_access_key=settings.AWS_MEDIA_SECRET_KEY)
+
+        bucket = conn.get_bucket(self.s3_bucket, validate=False)
+
+        if not self.s3_key:
+            datepart = datetime.utcnow().strftime("%Y/%m/%d")
+            fname = uuid.uuid4()
+            fmtargs = dict(datepart=datepart, filename=fname, ext=img_format.lower(),
+                           prefix=settings.S3_MEDIA_KEY_PREFIX)
+            self.s3_key = "{prefix}img/{datepart}/{filename}.{ext}".format(**fmtargs)
+            k = bucket.new_key(self.s3_key)
+        else:
+            k = bucket.get_key(self.s3_key)
+
+        headers = {}
+        content_type = mimetypes.types_map.get('.' + img_format.lower())
+        if content_type:
+            headers['Content-Type'] = content_type
+
+        file_obj.seek(0)
+        self.size_bytes = k.set_contents_from_file(file_obj, headers=headers, policy='public-read')
+        self.file_url = k.generate_url(expires_in=0, query_auth=False)
 
 
 class Album(models.Model):

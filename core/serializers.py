@@ -8,7 +8,6 @@ from rest_framework import serializers
 from .models import Account, Album, AlbumType, AlbumFile, Thumbnail, Event, EventGuest
 from django.utils import timezone
 import requests
-from .tasks import store_albumfile_and_thumbnails_s3
 import logging
 logger = logging.getLogger(__name__)
 
@@ -46,19 +45,12 @@ class FileFieldAllowEmpty(serializers.FileField):
 class TempImageFileData(object):
 
     def __init__(self, **kw):
-        self.filename = kw.get('filename')
+        self.file = kw.get('file')
         self.original_name = kw.get('original_name')
         self.width = kw.get('width')
         self.height = kw.get('height')
         self.format = kw.get('format', '')
         self.size_bytes = kw.get('size_bytes')
-
-    def update_from_file(self, filename):
-        if not self.filename:
-            new_name = "{}.{}".format(filename, self.format.lower())
-            os.rename(filename, new_name)
-            self.filename = new_name
-        self.size_bytes = os.path.getsize(self.filename)
 
 
 class AlbumFileSerializer(serializers.HyperlinkedModelSerializer):
@@ -95,15 +87,14 @@ class AlbumFileSerializer(serializers.HyperlinkedModelSerializer):
             msg = _("Url needs to contain an image.")  # TODO: Or a video
             raise serializers.ValidationError(msg)
 
-        tmp = self._get_tmpfile()
+        tmp = tempfile.TemporaryFile()
+
         for chunk in resp.iter_content(65536):  # 64K
             tmp.write(chunk)
 
         img_data = self._validate_img_file(tmp)
         img_data.original_name = unquote(data.split('/')[-1])
-        filename = tmp.name
-        tmp.close()
-        img_data.update_from_file(filename)
+        img_data.size_bytes = resp.headers['content-length']
 
         self.context['img_data'] = img_data
 
@@ -121,16 +112,8 @@ class AlbumFileSerializer(serializers.HyperlinkedModelSerializer):
             msg = _("Url needs to contain an image.")  # TODO: Or a video
             raise serializers.ValidationError(msg)
 
-        tmp = self._get_tmpfile()
-        for chunk in data.chunks():
-            tmp.write(chunk)
-
-        img_data = self._validate_img_file(tmp)
+        img_data = self._validate_img_file(data)
         img_data.original_name = data.name
-
-        filename = tmp.name
-        tmp.close()
-        img_data.update_from_file(filename)
 
         self.context['img_data'] = img_data
 
@@ -149,13 +132,11 @@ class AlbumFileSerializer(serializers.HyperlinkedModelSerializer):
             w, h = img.size
             format_ = img.format
         except IOError:
-            try:
-                os.remove(imgfile)
-            except OSError:
-                pass
             raise serializers.ValidationError('Does not appear to be a valid image.')
 
-        return TempImageFileData(width=w, height=h, format=format_)
+        imgfile.seek(0)
+
+        return TempImageFileData(width=w, height=h, format=format_, file=imgfile)
 
     def validate(self, data):
         "Check that we have source_url or source_file, but not both."
@@ -177,7 +158,7 @@ class AlbumFileSerializer(serializers.HyperlinkedModelSerializer):
 
         if img_data:
             # create image data
-            af = album.albumfiles.create(
+            af = AlbumFile(
                 owner=self.context['request'].user,
                 name=validated_data.get('name') or img_data.original_name.rsplit('.', 1)[0],
                 description=validated_data.get('description', ''),
@@ -185,10 +166,10 @@ class AlbumFileSerializer(serializers.HyperlinkedModelSerializer):
                 height=img_data.height,
                 size_bytes=img_data.size_bytes,
                 file_type=AlbumFile.PHOTO_TYPE,
-                status=AlbumFile.PROCESSING,
-                tmp_filename=img_data.filename,
-                tmp_hostname=settings.HOST_NAME)
-            store_albumfile_and_thumbnails_s3(af.id)  # Async task
+                status=AlbumFile.PROCESSING)
+            af.upload_s3_photo(img_data.file, img_data.format)
+            af.save()
+            album.albumfiles.add(af)
             return af
 
 

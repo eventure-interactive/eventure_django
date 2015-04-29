@@ -3,6 +3,7 @@ var async = require('async');
 var AWS = require('aws-sdk');
 var gm = require('gm').subClass({ imageMagick: true }); // Enable ImageMagick integration.
 var util = require('util');
+var uuid  = require('node-uuid');
 
 // get reference to S3 client 
 var s3 = new AWS.S3();
@@ -12,7 +13,7 @@ exports.handler = function(event, context) {
 	console.log("Reading options from event:\n", util.inspect(event, {depth: 5}));
 	var srcBucket = event.Records[0].s3.bucket.name;
 	// Object key may have spaces or unicode non-ASCII characters.
-    var srcKey    = decodeURIComponent(event.Records[0].s3.object.key.replace(/\+/g, " "));  
+	var srcKey    = decodeURIComponent(event.Records[0].s3.object.key.replace(/\+/g, " "));
 	var dstBucket = srcBucket + "-thumbnail";
 	// var dstKey    = "thumb-" + srcKey;
 
@@ -54,12 +55,13 @@ exports.handler = function(event, context) {
 			var resized;
 
 			if (isLandscape) {
-				resized = gmObj.resize(newSizePx, null, '>');
+				resized = gmObj.resize(newSizePx, null, '>');  // '>' ensures we will resize only if we are downsizing (wont upscale)
 			} else {
 				resized = gmObj.resize(null, newSizePx, '>');
 			}
 
 			var newKey = keyPrefix + '_S' + newSizePx.toString() + keyExtension;
+
 			resized.toBuffer(imageType, function(err, buffer) {
 					if (err) {
 						next(err);
@@ -67,11 +69,22 @@ exports.handler = function(event, context) {
 						next(null, newKey, buffer);
 					}
 				});
-
 			},
-		function upload(newKey, buffer, next) {
+		function getNewSize(newKey, buffer, next) {
+			// the 'resized' var in thubmnail above keeps gmObj's size characteristics even after the resize (pre-resize),
+			// so make a new object here to get the dimensions.
+			gm(buffer).size(function(err, size){
+				if (err){
+					next(err);
+				} else {
+					next(null, newKey, buffer, size.width, size.height);
+				}
+			});
+			},
+		function upload(newKey, buffer, width, height, next) {
+			var newUrl = "https://" + dstBucket + ".s3.amazonaws.com/" +  newKey;
 			// Stream the transformed image to a different S3 bucket.
-			s3.putObject({
+			var req = s3.putObject({
 					Bucket: dstBucket,
 					Key: newKey,
 					Body: buffer,
@@ -83,9 +96,15 @@ exports.handler = function(event, context) {
 					if (err) {
 						next(err);
 					} else {
-						next(null, {AWSResponseData: data, 
-								   	Bucket: dstBucket,
-									Key: newKey });
+						var sizeBytes = req.httpRequest.headers['Content-Length'];
+						next(null, { // AWSResponseData: data,  // excluding this, as the Etag is formatted with escaped quotes,
+																// and we don't need anything in this right now.
+									Bucket: dstBucket,
+									Key: newKey,
+									SizeBytes:  sizeBytes,
+									Width: width,
+									Height: height,
+									Url: newUrl});
 					}
 				});
 			}
@@ -96,7 +115,7 @@ exports.handler = function(event, context) {
 		function download(next) {
 			s3.getObject(s3GetParams, next);
 		},
-		function makeGM(response, next) {
+		function makeGraphicsMagic(response, next) {
 			contentType = response.ContentType;  // contentType from above (function global)
 			gm(response.Body).autoOrient().size(function(err, size) {
 				if (err) {
@@ -111,7 +130,20 @@ exports.handler = function(event, context) {
 
 			});
 		},
-		function doIt(gmObj, isLandscape, next) {
+		function downsample(gmObj, isLandscape, next) {
+			// Downsample potentially very large images so that we are at most dealing with a 1280 px image
+			// and we don't have to keep around response.Body from above.
+			// This step can result in quite large time and memory savings.
+			gmObj.resize(1280, 1280, '>').toBuffer(imageType, function(err, buffer) {
+					if (err) {
+						next(err);
+					} else {
+						next(null, buffer, isLandscape);
+					}
+				});
+		},
+		function doIt(buffer, isLandscape, next) {
+			var gmObj = gm(buffer);
 			async.parallel({
 					48: function(callback) {thumbnailAndUpload(48, gmObj, isLandscape, callback);},
 					100: function(callback) {thumbnailAndUpload(100, gmObj, isLandscape, callback);},
@@ -128,17 +160,38 @@ exports.handler = function(event, context) {
 			var queue = null;
 			
 			if (srcKey.indexOf('dev') === 0) {
-				queue = "https://sqs.us-east-1.amazonaws.com/435327525078/media-img-thumbnail-dev";
+				queue = "https://sqs.us-east-1.amazonaws.com/435327525078/dev-celery";
 			}
 			if (queue) {
-				var msg = {	type: 'createThumbnail', 
-							srcKey: srcKey, 
-							srcBucket: srcBucket, 
-							thumbnailResults: results};
+				var msg_id = uuid.v4();
+				var msg_envelope = {
+					'content-encoding': 'utf-8',
+					'content-type': 'application/json',
+					headers: {},
+					properties: {
+								body_encoding: 'base64',
+								correlation_id: msg_id,
+								delivery_info: {exchange: null, routing_key: null},
+								delivery_tag: null}
+				};
+
+				// json_data is the string that will be passed to the celery function
+				json_data = JSON.stringify({
+								srcKey: srcKey,
+								srcBucket: srcBucket,
+								thumbnailResults: results});
+
+				// this is the actual celery task body. 'args' will be passed to our task.
+				msg_envelope.body = new Buffer(JSON.stringify({
+							task: 'core.tasks.finalize_s3_thumbnails',
+							args: [ json_data ],
+							id: msg_id,
+							retries: 0})).toString('base64');
+
 				var sqs = new AWS.SQS({endpoint: "https://sqs.us-east-1.amazonaws.com"});
 				sqs.sendMessage({
 					QueueUrl: queue,
-					MessageBody: JSON.stringify(msg),
+					MessageBody: new Buffer(JSON.stringify(msg_envelope)).toString('base64'),
 				}, next);
 			} else {
 				console.warn('No SQS queue established for srcKey ' + srcKey, ', no message sent to SQS.');

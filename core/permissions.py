@@ -50,7 +50,9 @@ class IsGrantedAccessToAlbum(permissions.BasePermission):
                 return obj.event.privacy == Event.PRIVATE and _is_event_member(obj.event, request.user) or obj.event.privacy == Event.PUBLIC
             return obj.owner == request.user or (obj.event is not None and obj.event.owner == request.user)
         elif isinstance(obj, AlbumFile):
-            #If User granted access to at least one album that this media belongs to, access is granted
+            if obj.owner_id == request.user.id:
+                return True
+            # If User granted access to at least one album that this media belongs to, access is granted
             for album in obj.albums.all():
                 if self.has_object_permission(request, view, album):
                     return True

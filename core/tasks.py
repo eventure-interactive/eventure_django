@@ -1,6 +1,8 @@
 "Module for async celery tasks."
 
 from datetime import datetime
+import json
+import logging
 import os
 import tempfile
 import uuid
@@ -12,6 +14,8 @@ from PIL import Image
 
 from core.models import AlbumFile, Thumbnail
 
+logger = logging.getLogger('core.tasks')
+
 
 @shared_task
 def add(x, y):
@@ -19,108 +23,56 @@ def add(x, y):
     return x + y
 
 
-def store_albumfile_and_thumbnails_s3(albumfile_id):
-    "Execute all tasks involved with thubmnailing and storing on S3."
-
-    # This runs the store on the main albumfile, then all the thubmnailing as a celery group,
-    # and then the finalize task at the end.
-
-    store_af = store_albumfile_s3.s(albumfile_id)
-    thumb_sizes = (size for size, label in Thumbnail.SIZE_CHOICES)
-    store_thumbnails = (store_thumbnail_s3.s(albumfile_id, size) for size in thumb_sizes)
-    finalize = finalize_albumfile.si(albumfile_id)
-
-    return (store_af | chord(store_thumbnails, finalize)).delay()
+@shared_task
+def finalize_s3_thumbnails(json_data):
+    """Store s3 thubmnail information from AWS lambda into the DB.
 
 
-@shared_task(queue=settings.HOST_NAME)
-def store_albumfile_s3(albumfile_id):
-    af = AlbumFile.objects.get(pk=albumfile_id)
+    This function isn't actully called from Django, but a message is insereted
+    by AWS lambda into the message queue and then executed by celery.
+    """
 
-    if af.file_type == AlbumFile.VIDEO_TYPE:
-        raise NotImplementedError('Videos are unsupported')
-    try:
-        img = Image.open(af.tmp_filename)
-    except IOError:
-        af.status = AlbumFile.ERROR
-        af.save()
-        raise
+    data = json.loads(json_data)
 
-    img_format = img.format.lower()
-    img.close()
+    logger.info('Got json_data %s', json_data)
 
-    datepart = datetime.utcnow().strftime("%Y/%m/%d")
-    fname = uuid.uuid4()
-    s3_key = "img/{datepart}/{filename}.{ext}".format(datepart=datepart, filename=fname, ext=img_format)
-    url = _do_upload_s3(af.tmp_filename, settings.S3_MEDIA_UPLOAD_BUCKET, s3_key)
-
-    af.file_url = url
-    af.save()
-
-    return s3_key
-
-
-@shared_task(queue=settings.HOST_NAME)
-def store_thumbnail_s3(main_s3_key, albumfile_id, size):
-    af = AlbumFile.objects.get(pk=albumfile_id)
+    bucket_name = data.get('srcBucket')
+    key_name = data.get('srcKey')
 
     try:
-        img = Image.open(af.tmp_filename)
-    except IOError:
-        af.status = AlbumFile.ERROR
-        af.save()
-        raise
+        albumfile = AlbumFile.objects.get(s3_bucket=bucket_name, s3_key=key_name)
+    except AlbumFile.DoesNotExist:
+        logger.error('AlbumFile not found for bucket: %r key: %r', bucket_name, key_name)
+        return
 
-    keypart = main_s3_key.rsplit(".", 1)[0]
-    s3_key = "{}_S{}.jpeg".format(keypart, size)
+    thumb_results = data.get('thumbnailResults')
+    if not thumb_results:
+        logger.error('Got no thumbnail results with key: %s, json: %s', key_name, json_data)
+        return
 
-    img.thumbnail((size, size))
-    w, h = img.size
-    with tempfile.NamedTemporaryFile(suffix='.jpeg') as img_f:
-        img.save(img_f, 'JPEG')
-        img_f.flush()
-        url = _do_upload_s3(img_f.name, settings.S3_MEDIA_UPLOAD_BUCKET, s3_key, reduced_redundancy=True)
-        size_bytes = os.path.getsize(img_f.name)
-        thumbnail = Thumbnail(
-            albumfile=af,
-            file_url=url,
-            size_type=size,
-            width=w,
-            height=h,
-            size_bytes=size_bytes)
+    exist_thumb = dict((str(t.size_type), t) for t in albumfile.thumbnails.all())
 
-    thumbnail.save()
-    return thumbnail.pk
+    logger.info('exist_thumb %s', exist_thumb)
 
+    for size, new_data in thumb_results.iteritems():
+        logger.info('Looking for size %r', size)
+        thumb = exist_thumb.get(size) or Thumbnail()
 
-def _do_upload_s3(filepath, bucket_name, s3_key, replace=False, reduced_redundancy=False):
-    "Upload a file to s3, and return the url the file was saved at."
-    conn = boto.s3.connect_to_region(settings.S3_MEDIA_REGION,
-                                     aws_access_key_id=settings.AWS_MEDIA_ACCESS_KEY,
-                                     aws_secret_access_key=settings.AWS_MEDIA_SECRET_KEY)
+        logger.info('Using thumb %r', thumb)
 
-    bucket = conn.get_bucket(bucket_name, validate=False)
-    if not replace:
-        k = bucket.new_key(s3_key)
-    else:
-        k = bucket.get_key(s3_key)
-    k.set_contents_from_filename(filepath, reduced_redundancy=reduced_redundancy)
-    k.set_acl('public-read')
-    return k.generate_url(expires_in=0, query_auth=False)
+        bucket_name = new_data['Bucket']
+        key_name = new_data['Key']
 
+        thumb.file_url = new_data['Url']
 
-@shared_task(queue=settings.HOST_NAME)
-def finalize_albumfile(albumfile_id):
-    "Mark the albumfile as acitve and delete any local files."
+        thumb.size_type = size
+        thumb.width = new_data.get('Width', 0)
+        thumb.height = new_data.get('Height', 0)
+        thumb.size_bytes = new_data.get('SizeBytes', 0)
+        thumb.albumfile_id = albumfile.id
+        thumb.save()
 
-    af = AlbumFile.objects.get(pk=albumfile_id)
+    if albumfile.status == AlbumFile.PROCESSING:
+        albumfile.status = AlbumFile.ACTIVE
+        albumfile.save()
 
-    tmp_filename = af.tmp_filename
-
-    af.tmp_filename = None
-    af.tmp_hostname = None
-    af.status = AlbumFile.ACTIVE
-    af.save()
-
-    os.remove(tmp_filename)
-    return af.pk
