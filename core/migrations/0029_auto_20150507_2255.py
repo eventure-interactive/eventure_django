@@ -27,16 +27,4 @@ class Migration(migrations.Migration):
             name='sender',
             field=models.ForeignKey(to=settings.AUTH_USER_MODEL, related_name='sent_ntfs'),
         ),
-        # migrations.AlterUniqueTogether(
-        #     name='albumfile',
-        #     unique_together=set([]),
-        # ),
-        # migrations.RemoveField(
-        #     model_name='albumfile',
-        #     name='tmp_filename',
-        # ),
-        # migrations.RemoveField(
-        #     model_name='albumfile',
-        #     name='tmp_hostname',
-        # ),
     ]

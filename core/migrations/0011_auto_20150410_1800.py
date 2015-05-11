@@ -11,18 +11,18 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AddField(
-            model_name='albumfile',
-            name='tmp_filename',
-            field=models.CharField(null=True, max_length=255),
-        ),
-        migrations.AddField(
-            model_name='albumfile',
-            name='tmp_hostname',
-            field=models.CharField(null=True, max_length=255),
-        ),
-        migrations.AlterUniqueTogether(
-            name='albumfile',
-            unique_together=set([('tmp_filename', 'tmp_hostname')]),
-        ),
+        # migrations.AddField(
+        #     model_name='albumfile',
+        #     name='tmp_filename',
+        #     field=models.CharField(null=True, max_length=255),
+        # ),
+        # migrations.AddField(
+        #     model_name='albumfile',
+        #     name='tmp_hostname',
+        #     field=models.CharField(null=True, max_length=255),
+        # ),
+        # migrations.AlterUniqueTogether(
+        #     name='albumfile',
+        #     unique_together=set([('tmp_filename', 'tmp_hostname')]),
+        # ),
     ]

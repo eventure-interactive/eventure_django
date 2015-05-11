@@ -21,16 +21,5 @@ class Migration(migrations.Migration):
             name='notification_type',
             field=models.SmallIntegerField(choices=[(4, 'ALBUMFILE_UPLOAD'), (2, 'EVENTGUEST_RSVP'), (1, 'EVENT_INVITE'), (3, 'EVENT_UPDATE')]),
         ),
-        # migrations.AlterUniqueTogether(
-        #     name='albumfile',
-        #     unique_together=set([]),
-        # ),
-        # migrations.RemoveField(
-        #     model_name='albumfile',
-        #     name='tmp_filename',
-        # ),
-        # migrations.RemoveField(
-        #     model_name='albumfile',
-        #     name='tmp_hostname',
-        # ),
+        
     ]

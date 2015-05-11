@@ -17,26 +17,9 @@ class Migration(migrations.Migration):
             name='email',
             field=models.CharField(max_length=100, unique=True, validators=[django.core.validators.EmailValidator()], null=True),
         ),
-        # migrations.AddField(
-        #     model_name='account',
-        #     name='profile_image',
-        #     field=models.ForeignKey(to='core.AlbumFile', null=True),
-        # ),
         migrations.AddField(
             model_name='account',
             name='profile_image',
             field=models.ForeignKey(to='core.AlbumFile', null=True),
         ),
-        # migrations.AlterUniqueTogether(
-        #     name='albumfile',
-        #     unique_together=set([]),
-        # ),
-        # migrations.RemoveField(
-        #     model_name='albumfile',
-        #     name='tmp_filename',
-        # ),
-        # migrations.RemoveField(
-        #     model_name='albumfile',
-        #     name='tmp_hostname',
-        # ),
     ]

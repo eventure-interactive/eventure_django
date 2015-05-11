@@ -38,19 +38,7 @@ class Migration(migrations.Migration):
             model_name='sentnotification',
             name='sender',
         ),
-        # migrations.AlterUniqueTogether(
-        #     name='albumfile',
-        #     unique_together=set([]),
-        # ),
         migrations.DeleteModel(
             name='SentNotification',
         ),
-        # migrations.RemoveField(
-        #     model_name='albumfile',
-        #     name='tmp_filename',
-        # ),
-        # migrations.RemoveField(
-        #     model_name='albumfile',
-        #     name='tmp_hostname',
-        # ),
     ]
