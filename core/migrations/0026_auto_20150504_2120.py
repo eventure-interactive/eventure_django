@@ -22,6 +22,11 @@ class Migration(migrations.Migration):
         #     name='profile_image',
         #     field=models.ForeignKey(to='core.AlbumFile', null=True),
         # ),
+        migrations.AddField(
+            model_name='account',
+            name='profile_image',
+            field=models.ForeignKey(to='core.AlbumFile', null=True),
+        ),
         # migrations.AlterUniqueTogether(
         #     name='albumfile',
         #     unique_together=set([]),
