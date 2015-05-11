@@ -31,6 +31,7 @@ def api_root(request, format=None):
         'albums': reverse('album-list', request=request, format=format),
         'events': reverse('event-list', request=request, format=format),
         'notifications': reverse('notification-list', request=request, format=format),
+        'self': reverse('self-detail', request=request, format=format),
     })
 
 
@@ -57,11 +58,23 @@ class AccountList(generics.ListAPIView):
     permission_classes = (permissions.IsAuthenticated, )
 
 
-class AccountDetail(generics.RetrieveUpdateAPIView):
+class AccountDetail(generics.RetrieveAPIView):
     "Show detailed information for the given account."
     queryset = Account.objects.all()
     serializer_class = AccountSerializer
-    permission_classes = (permissions.IsAuthenticated, IsAccountOwnerOrReadOnly)
+    permission_classes = (permissions.IsAuthenticated, )
+
+
+class AccountSelfDetail(generics.RetrieveUpdateAPIView):
+    "Show account information for the logged-in user."
+
+    serializer_class = AccountSerializer
+    permission_classes = (permissions.IsAuthenticated, )
+    queryset = Account.objects.filter(status=Account.ACTIVE)
+
+    def get_object(self):
+        qs = self.get_queryset()
+        return get_object_or_404(qs, id=self.request.user.id)
 
 
 class AlbumList(generics.ListCreateAPIView):
@@ -97,7 +110,7 @@ class AlbumDetail(generics.RetrieveUpdateDestroyAPIView):
 
 class AlbumFileDetail(generics.RetrieveUpdateAPIView):
 
-    queryset = AlbumFile.active.all()
+    queryset = AlbumFile.active.all().prefetch_related('thumbnails', 'albums')
     serializer_class = AlbumFileSerializer
     permission_classes = (permissions.IsAuthenticated, IsGrantedAccessToAlbum)  # TODO: Permissions on this
 
@@ -206,14 +219,14 @@ class EventList(generics.ListCreateAPIView):
         else:
             # No private events that user dont own or guest of should be shown
             owner_guest = ~Q(owner=self.request.user) & ~Q(eventguest__guest=self.request.user)
-            events = Event.objects.exclude(Q(privacy=Event.PRIVATE), owner_guest)
-            return events
+            qs = Event.objects.exclude(Q(privacy=Event.PRIVATE), owner_guest)
+            return qs.prefetch_related('albums', 'guests')
 
 
 class EventDetail(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = (permissions.IsAuthenticated, IsGrantedAccessToEvent,)
 
-    queryset = Event.objects.all()
+    queryset = Event.objects.all().select_related('owner')
     serializer_class = EventSerializer
 
 
@@ -225,7 +238,7 @@ class EventGuestList(generics.ListCreateAPIView):
     paginate_by = 20
 
     def get_serializer_context(self):
-        context = super().get_serializer_context()
+        context = super(EventGuestList, self).get_serializer_context()
         context['event'] = self.get_event()
         return context
 

@@ -65,9 +65,13 @@ class Account(AbstractBaseUser, PermissionsMixin):
     is_staff = models.BooleanField(default=False)
     modified = models.DateTimeField(auto_now=True)
     date_joined = models.DateTimeField(default=timezone.now)
+<<<<<<< HEAD
     email = models.CharField(unique=True, max_length=100, validators=[EmailValidator()], null=True)
     profile_image = models.ForeignKey('AlbumFile', null=True)
     last_ntf_checked = models.DateTimeField(null=True)
+=======
+    profile_albumfile = models.ForeignKey('AlbumFile', blank=True, null=True)
+>>>>>>> fc2122185c6b37dd40318f99554ba3050c2d8dd7
 
     objects = AccountUserManager()
 
@@ -343,6 +347,7 @@ class EventGuest(models.Model):
 
     # class Meta: # comment out so event can be read-only in serializer
     #     unique_together = (("guest", "event"),)
+
 
 class InAppNotification(models.Model):
     created = models.DateTimeField(auto_now_add=True)
