@@ -5,18 +5,29 @@ from django.conf import settings
 from django.utils.translation import ugettext as _
 from PIL import Image
 from rest_framework import serializers
-from .models import Account, Album, AlbumType, AlbumFile, Thumbnail, Event, EventGuest
+from .models import Account, Album, AlbumType, AlbumFile, Thumbnail, Event, EventGuest, InAppNotification
 from django.utils import timezone
 import requests
 from .tasks import store_albumfile_and_thumbnails_s3
+from .tasks import send_email, send_notifications
+from core.shared.const.NotificationTypes import NotificationTypes
 import logging
 logger = logging.getLogger(__name__)
 
 
 class AccountSerializer(serializers.HyperlinkedModelSerializer):
+    # profile_image = serializers.SerializerMethodField('get_user_albumfile')
+
+    # def get_user_albumfile(self, obj):
+    #     user = self.context['request'].user
+    #     albumfiles = AlbumFile.objects.filter(owner=user)
+    #     serializer = AlbumFileSerializer(many=True, data=albumfiles, context={'request': self.context['request']})
+    #     serializer.is_valid()
+    #     return serializer.data
+
     class Meta:
         model = Account
-        fields = ('url', 'name')
+        fields = ('url', 'name', 'email', 'profile_image')
 
 
 class ThumbnailSerializer(serializers.ModelSerializer):
@@ -186,10 +197,21 @@ class AlbumFileSerializer(serializers.HyperlinkedModelSerializer):
                 size_bytes=img_data.size_bytes,
                 file_type=AlbumFile.PHOTO_TYPE,
                 status=AlbumFile.PROCESSING,
-                tmp_filename=img_data.filename,
-                tmp_hostname=settings.HOST_NAME)
+                # tmp_filename=img_data.filename,
+                # tmp_hostname=settings.HOST_NAME
+                )
             store_albumfile_and_thumbnails_s3(af.id)  # Async task
+            # send out in-app notifications to all guests
+            guests = album.event.guests.all()
+            self.send_notifications(guests, af)
+
             return af
+
+    def send_notifications(self, guests, albumfile):
+        notification_type = NotificationTypes.ALBUMFILE_UPLOAD.value
+        sender = self.context['request'].user
+        for guest in guests:
+            send_notifications(notification_type, sender.id, guest.id, 'albumfile', albumfile.id)
 
 
 class EventSerializer(serializers.HyperlinkedModelSerializer):
@@ -217,8 +239,21 @@ class EventSerializer(serializers.HyperlinkedModelSerializer):
             raise serializers.ValidationError('Start Date must not be in the past')
         return value
 
+    def update(self, instance, validated_data):
+        instance = super(serializers.HyperlinkedModelSerializer, self).update(instance, validated_data)
 
-class GuestHyperlinkedIdentityField(serializers.HyperlinkedIdentityField):
+        self.send_notifications(instance)
+        return instance
+
+    def send_notifications(self, event):
+        notification_type = NotificationTypes.EVENT_UPDATE.value
+        sender = self.context['request'].user
+        guests = event.guests.all()
+        for guest in guests:
+            send_notifications(notification_type, sender.id, guest.id, 'event', event.id)
+
+
+class EventGuestHyperlinkedIdentityField(serializers.HyperlinkedIdentityField):
 
     def get_url(self, obj, view_name, request, format):
         """
@@ -239,9 +274,9 @@ class GuestHyperlinkedIdentityField(serializers.HyperlinkedIdentityField):
 
 class EventGuestSerializer(serializers.HyperlinkedModelSerializer):
     event = serializers.HyperlinkedRelatedField(read_only=True, view_name='event-detail', )
-    # event = serializers.HiddenField(default=None,) 
+    # event = serializers.HiddenField(default=None,)
     guest = serializers.HyperlinkedRelatedField(queryset=Account.objects.all(), view_name='account-detail')
-    url = GuestHyperlinkedIdentityField(view_name='eventguest-detail')
+    url = EventGuestHyperlinkedIdentityField(view_name='eventguest-detail')
 
     class Meta:
         model = EventGuest
@@ -251,7 +286,11 @@ class EventGuestSerializer(serializers.HyperlinkedModelSerializer):
         event = self.context['event']
         if event:
             guest = EventGuest.objects.create(event=event, **validated_data)
-            return guest
+            if guest:
+                # Send invitation email
+                # self.send_invitation()  
+                self.send_notifications(guest.guest_id)
+                return guest
 
     def validate(self, data):
         ''' For creation: Unique together (event, guest). Work-around for unique_together wont work with read-only fields (need value to validate) '''
@@ -262,6 +301,43 @@ class EventGuestSerializer(serializers.HyperlinkedModelSerializer):
                 raise serializers.ValidationError('Cannot add same guest to event more than once')
         return data
 
+    # def send_invitation(self):
+    #     notification_type = 'invite'
+    #     # gather sender data
+    #     sender = self.context['request'].user
+    #     logger.debug(sender.phone)
+    #     data = {
+    #         'Site_Url': 'http://devapi.eventure.com/',
+
+    #         'ProfileImage': 'https://www.petfinder.com/wp-content/uploads/2012/11/dog-how-to-select-your-new-best-friend-thinkstock99062463.jpg',
+    #         'Email': sender.email,
+    #         'Phone': sender.phone,
+    #         'AccountName': sender.name,
+    #         'AccountScreenName': sender.name,
+    #     }
+    #     # gather recipient data
+    #     to_email = 'tidushue@gmail.com' #guest.email 
+    #     # gather event data
+    #     data.update({
+    #             'PlanID': 2,
+    #             'Title': 'Event ABCDEF',
+    #             'StartDate': '2015-6-1 12PM',
+    #             'Address': '123 Someplace',
+    #         })
+
+    #     # gather card data
+    #     data['Card'] = u'<a href="default.asp">\
+    #                         <img src="http://imagesdie.com/wp-content/uploads/2015/02/dog-poll-photos-videos-blogs-itimes-animals-images-dog-pictures.jpg" alt="HTML tutorial" style="width:420px;border:0">\
+    #                         </a>'
+
+    #     send_email(notification_type, to_email, data) # async task
+    def send_notifications(self, guest_id):
+        notification_type = NotificationTypes.EVENT_INVITE.value
+        sender = self.context['request'].user
+        event = self.context['event']
+
+        send_notifications(notification_type, sender.id, guest_id, 'event', event.id)  # async
+
 
 class EventGuestUpdateSerializer(EventGuestSerializer):
     ''' to be used with Event Guest Detail view '''
@@ -270,7 +346,18 @@ class EventGuestUpdateSerializer(EventGuestSerializer):
     def update(self, instance, validated_data):
         instance.rsvp = validated_data.get('rsvp')
         instance.save()
+
+        self.send_notifications(instance)
+
         return instance
+
+    def send_notifications(self, eventguest):
+        notification_type = NotificationTypes.EVENTGUEST_RSVP.value
+        sender = self.context['request'].user
+        event = eventguest.event
+        recipient = event.owner
+
+        send_notifications(notification_type, sender.id, recipient.id, 'eventguest', eventguest.id)  # async
 
 
 class AlbumSerializer(serializers.HyperlinkedModelSerializer):
@@ -295,4 +382,12 @@ class AlbumSerializer(serializers.HyperlinkedModelSerializer):
 class AlbumUpdateSerializer(AlbumSerializer):
     ''' When updating album, should not allow update event '''
     event = serializers.HyperlinkedRelatedField(read_only=True, view_name='event-detail', allow_null=True)
+
+
+class InAppNotificationSerializer(serializers.HyperlinkedModelSerializer):
+    content_type = serializers.CharField()
+
+    class Meta:
+        model = InAppNotification
+        fields = ('sender', 'recipient', 'notification_type', 'content_type', 'object_id')
 # EOF
