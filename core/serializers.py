@@ -27,7 +27,7 @@ class AccountSerializer(serializers.HyperlinkedModelSerializer):
 
     class Meta:
         model = Account
-        fields = ('url', 'name', 'email', 'profile_image')
+        fields = ('url', 'name', 'email', 'profile_albumfile')
 
 
 class ThumbnailSerializer(serializers.ModelSerializer):
