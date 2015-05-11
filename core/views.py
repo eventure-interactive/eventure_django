@@ -2,14 +2,16 @@
 
 from django.shortcuts import get_object_or_404
 from django.http import Http404
-from rest_framework import status, permissions, generics
+import django_filters
+from rest_framework import status, permissions, generics, pagination
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.reverse import reverse
+from rest_framework.compat import OrderedDict
 from rest_framework import filters
 from core.models import Account, Album, AlbumType, AlbumFile, Event, EventGuest
 from core.serializers import AccountSerializer, AlbumSerializer, AlbumFileSerializer, EventSerializer, \
-    EventGuestSerializer, EventGuestUpdateSerializer, AlbumUpdateSerializer
+    EventGuestSerializer, EventGuestUpdateSerializer, AlbumUpdateSerializer, InAppNotificationSerializer
 from core.permissions import IsAccountOwnerOrReadOnly, IsAlbumUploadableOrReadOnly, IsGrantedAccessToEvent, IsGrantedAccessToAlbum
 from django.db.models import Q
 from django.contrib.auth.models import AnonymousUser
@@ -17,6 +19,7 @@ from django.utils.translation import ugettext as _
 from django.contrib.gis.geos import Point
 from geopy.geocoders import GoogleV3
 from django.contrib.gis.measure import D
+from django.utils import timezone
 import logging
 logger = logging.getLogger(__name__)
 
@@ -27,6 +30,7 @@ def api_root(request, format=None):
         'accounts': reverse('account-list', request=request, format=format),
         'albums': reverse('album-list', request=request, format=format),
         'events': reverse('event-list', request=request, format=format),
+        'notifications': reverse('notification-list', request=request, format=format),
     })
 
 
@@ -130,26 +134,45 @@ class AlbumFilesList(generics.ListCreateAPIView):
         return album.albumfiles_queryset(album.owner)
 
 
+class EventFilter(django_filters.FilterSet):
+    title = django_filters.CharFilter(name='title', lookup_type='icontains')
+    location = django_filters.CharFilter(name='location', lookup_type='icontains')
+    min_start = django_filters.DateTimeFilter(name='start', lookup_type='gte')
+    owner = django_filters.CharFilter(name='owner__name', lookup_type='icontains')
+    owner_phone = django_filters.CharFilter(name='owner__phone', lookup_type='icontains')
+
+    class Meta:
+        model = Event
+        fields = ['title', 'location', 'min_start', 'privacy', 'owner']
+
+
 class EventList(generics.ListCreateAPIView):
     ''' Show all public events or private events that you are member (guest or own)
             OR
         Show all events that is in a certain distance to a location
         e.g: Find events in 100 miles radius of Costa Mesa CA
-        /events?vicinity='costa mesa'&miles=100
+        api/events?vicinity='costa mesa'&miles=100
             OR
-        Show events that has title or location contains string(s)
-        e.g: Find events that has location or title contains 'pasadena'
-        /events?search='pasadena'
+        Search events using query parameters
+        api/events?min_start='2015-06-01 01:00:00'
+        api/events?title=party,event
+        api/events?location=park
+        api/events?privacy=1
+        api/events?owner=henry
+        api/events?owner_phone=888
     '''
     URL_PARAM_VICINITY = 'vicinity'
-    URL_PARAM_MILES    = 'miles'
+    URL_PARAM_MILES = 'miles'
 
     permission_classes = (permissions.IsAuthenticated,)
     serializer_class = EventSerializer
     paginate_by = 20
 
-    filter_backends = (filters.SearchFilter,)
-    search_fields = ('title', 'location')
+    # filter_backends = (filters.SearchFilter,)
+    # search_fields = ('title', 'location')
+
+    # queryset = Event.objects.all()
+    filter_class = EventFilter
 
     def perform_create(self, serializer):
         instance = serializer.save(owner=self.request.user)
@@ -183,7 +206,8 @@ class EventList(generics.ListCreateAPIView):
         else:
             # No private events that user dont own or guest of should be shown
             owner_guest = ~Q(owner=self.request.user) & ~Q(eventguest__guest=self.request.user)
-            return Event.objects.exclude(Q(privacy=Event.PRIVATE), owner_guest)
+            events = Event.objects.exclude(Q(privacy=Event.PRIVATE), owner_guest)
+            return events
 
 
 class EventDetail(generics.RetrieveUpdateDestroyAPIView):
@@ -240,3 +264,44 @@ class EventGuestDetail(MultipleFieldLookupMixin, generics.RetrieveUpdateDestroyA
     lookup_fields = ('event_id', 'guest_id')
 
 
+class NotificationCustomPagination(pagination.PageNumberPagination):
+    def get_paginated_response(self, data):
+        return Response(OrderedDict([
+            ('count', self.page.paginator.count),
+            ('new', self.request.new_ntfs_count),
+            ('next', self.get_next_link()),
+            ('previous', self.get_previous_link()),
+            ('results', data)
+        ]))
+
+
+class NotificationList(generics.ListAPIView):
+    '''
+    List of all received in-app notifications
+    '''
+    serializer_class = InAppNotificationSerializer
+    permission_classes = (permissions.IsAuthenticated,)
+    paginate_by = 20
+    pagination_class = NotificationCustomPagination
+    filter_backends = (filters.OrderingFilter,)
+    ordering = ('-created',)
+
+    def get_queryset(self):
+        account = self.request.user
+        # Get ntfs before updating last_ntf_checked
+        received_ntfs = account.received_ntfs.all()
+        # Sneak in the new ntfs count to be used in paginator
+        self.request.new_ntfs_count = self.get_ntfs_since_last_check_count(account, received_ntfs)
+        # Update account.last_ntf_checked
+        account.last_ntf_checked = timezone.now()
+        account.save()
+
+        return received_ntfs
+
+    def get_ntfs_since_last_check_count(self, account, received_ntfs):
+        last_check = account.last_ntf_checked
+        if last_check is not None:
+            return received_ntfs.filter(created__gt=last_check).count()
+        else:
+            return received_ntfs.count()
+#EOF

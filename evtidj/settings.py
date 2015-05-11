@@ -119,6 +119,7 @@ STATIC_URL = '/static/'
 
 REST_FRAMEWORK = {
     'PAGE_SIZE': 25,
+    'DEFAULT_FILTER_BACKENDS': ('rest_framework.filters.DjangoFilterBackend',)
 }
 
 
@@ -137,8 +138,16 @@ LOGGING = {
     'handlers': {
         'file': {
             'level': 'DEBUG',
-            'class': 'logging.FileHandler',
-            'filename': 'log.log',
+            'class': 'logging.handlers.TimedRotatingFileHandler',
+            'when': 'midnight',
+            'filename': 'logs/django.log',
+            'formatter': 'verbose'
+        },
+        'log_file':{
+            'level': 'DEBUG',
+            'class': 'logging.handlers.TimedRotatingFileHandler',
+            'when': 'midnight',
+            'filename': 'logs/log.log',
             'formatter': 'verbose'
         },
     },
@@ -149,7 +158,7 @@ LOGGING = {
             'level': 'DEBUG',
         },
         'core': {
-            'handlers': ['file'],
+            'handlers': ['log_file'],
             'level': 'DEBUG',
         },
     }

@@ -1,0 +1,56 @@
+﻿<%namespace name="partials" file="partials.htm"/>
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+        <title>::Eventure::</title>
+    </head>
+    <style type='text/css'>
+	    img { outline: none; border: none; }
+    </style>
+    <body style="margin: 0; background: #fff; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 200; padding: 0;">
+        <subject>${self.subject()}</subject>
+        <table width="610" cellpadding="0" cellspacing="0" align="center" style="background:#fff; text-align:center;">
+            <tr>
+                <td>
+                    <table width="544" align="center" style="text-align: center;">
+                        <tr>
+                            <td style="padding-bottom: 20px; padding-top: 24px; border-bottom: 2px solid #252525;">
+                                <%block name="header">
+									${partials.header()}
+								</%block>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td valign="top">
+                                ${self.body()}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="border-top: 1px solid #cfcfcf; padding: 28px 0px; border-bottom: 1px solid #cfcfcf;">
+								<%block name="footertop">
+									${partials.footertop()}
+								</%block>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 16px 0px; border-bottom: 1px solid #cfcfcf;">
+								<%block name="footermiddle">
+									${partials.footermiddle()}
+								</%block>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding-top: 38px; font-size: 13px; font-style: italic;">
+                                <%block name="footerbottom">
+									${partials.footerbottom()}
+								</%block>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+    </body>
+</html>

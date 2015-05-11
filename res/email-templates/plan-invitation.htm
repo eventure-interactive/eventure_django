@@ -1,0 +1,80 @@
+﻿<%inherit file="plan-layout.htm"/>
+
+<%def name="subject()">You have been invited to ${Title}</%def>
+
+<table width="100%" align="center" style="text-align:center; border-collapse:collapse;">
+	<tr>
+	     <td style="padding-top:40px" >
+            % if ProfileImage:
+            <img src="${ProfileImage}" style="-moz-border-radius:50%;-webkit-border-radius:50%;border-radius:50%;max-width:120px;max-height: 120px;" />
+            % endif
+	    </td>
+	</tr>
+	<tr>
+	    <td style="padding-top: 20px; padding-bottom: 43px; font-size:28px; color:#282828; font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-style:normal; ">
+	        ${AccountName} has invited you to...
+	    </td>
+	</tr>
+    
+	<tr>
+	    <td>
+	         <a href="${Site_Url}events/${PlanID}" style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:16px;font-weight: 300;color:#1f8ec2;text-decoration:none;">Click here to view the event page.</a>
+	    </td>
+	</tr>
+	<tr>
+	    <td height="40"></td>
+	</tr>
+	<tr>
+	    <td>
+	        <table width="100%">
+                <tr>
+                    <td width="42%" style="text-align:right; padding-bottom:15px; font-size:14px; padding-right:30px; font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#313131; font-weight:bold; vertical-align:top;">Event</td>
+                    <td style="text-align:left; font-size:14px; padding-bottom:15px; vertical-align:top; font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#313131;">${Title}</td>
+                </tr>
+                <tr>
+                    <td width="42%" style="text-align:right; padding-bottom:15px; font-size:14px; padding-right:30px; font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#313131; font-weight:bold;  vertical-align:top; width:42%;">When</td>
+                    <td width="58%" style="text-align:left;padding-bottom:15px; font-size:14px; font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;vertical-align:top; color:#313131;">${StartDate}</td>
+                </tr>
+                % if Address:
+                <tr>
+                    <td width="42%" style="text-align:right; padding-bottom:15px; font-size:14px; padding-right:30px; font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#313131; font-weight:bold; vertical-align:top; width:42%;">Where</td>
+                    <td width="58%" style="text-align:left; padding-bottom:15px; font-size:14px; vertical-align:top; font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#358ccf;">
+                        <a href="http://maps.google.com/?q=${Address}" style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:14px;font-weight: 300;color:#1f8ec2;text-decoration:none;">${Address}</a>
+                    </td>
+                </tr>
+                % endif
+                % if Phone:
+                <tr>
+                    <td width="42%" style="text-align:right; padding-bottom:15px; font-size:14px; padding-right:30px; font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#313131; font-weight:bold;  vertical-align:top;">Contact</td>
+                    <td width="58%" style="text-align:left; padding-bottom:15px; font-size:14px; vertical-align:top; font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#358ccf;">
+                        <a href="tel:${Phone}" style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:14px;font-weight: 300;color:#1f8ec2;text-decoration:none;">${Phone}</a>
+                    </td>
+                </tr>
+                % endif
+                <tr>
+                    <td width="42%" style="text-align:right; padding-bottom:15px; font-size:14px; padding-right:30px; font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#313131; font-weight:bold; vertical-align:top; width:42%;">Hosted by</td>
+                    <td width="58%" style="text-align:left; padding-bottom:15px; font-size:14px; padding-right:30px; font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;width:60%;vertical-align:top;">
+                        <a href="${Site_Url}user/${AccountScreenName}" style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:14px;font-weight: 300;color:#1f8ec2;text-decoration:none;">${AccountName}</a>
+                    </td>
+                </tr>
+                % if Notes:
+                <tr>
+                    <td width="42%" style="text-align:right; padding-bottom:15px; font-size:14px; padding-right:30px; font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#313131; font-weight:bold; vertical-align:top;">Notes</td>
+                    <td width="58%" style="text-align:left; padding-bottom:15px; vertical-align:top; font-family:'Helvetica Neue',Helvetica,Arial,sans-serif; font-size:14px; color:#313131;">
+                    ${Notes}
+                    </td>
+                </tr>
+                % endif
+	        </table>
+	    </td>
+	</tr>
+	<tr>
+	    <td height="60"></td>
+	</tr>
+    <tr>
+        <!-- Need to put generated card image here if there is any -->
+        % if Card:
+            ${Card}
+        % endif
+    </tr>
+</table>

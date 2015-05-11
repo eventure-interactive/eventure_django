@@ -1,8 +1,8 @@
 from six.moves.urllib.parse import unquote
 import phonenumbers
-# from django.db import models
-
-from django.core.validators import RegexValidator, MinValueValidator, MaxValueValidator
+from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
+from django.core.validators import RegexValidator, MinValueValidator, MaxValueValidator, EmailValidator
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
 from django.contrib.postgres.fields import HStoreField
 from django.utils import timezone
@@ -11,7 +11,7 @@ from django.core.exceptions import ValidationError
 from django.contrib.gis.db import models
 from django.contrib.gis.geos import Point
 from geopy.geocoders import GoogleV3
-
+from core.shared.const.NotificationTypes import NotificationTypes
 import logging
 logger = logging.getLogger(__name__)
 
@@ -65,6 +65,9 @@ class Account(AbstractBaseUser, PermissionsMixin):
     is_staff = models.BooleanField(default=False)
     modified = models.DateTimeField(auto_now=True)
     date_joined = models.DateTimeField(default=timezone.now)
+    email = models.CharField(unique=True, max_length=100, validators=[EmailValidator()], null=True)
+    profile_image = models.ForeignKey('AlbumFile', null=True)
+    last_ntf_checked = models.DateTimeField(null=True)
 
     objects = AccountUserManager()
 
@@ -160,8 +163,8 @@ class AlbumFile(models.Model):
         (DELETED, 'Deleted'),
     )
 
-    class Meta:
-        unique_together = (("tmp_filename", "tmp_hostname"),)
+    # class Meta:
+    #     unique_together = (("tmp_filename", "tmp_hostname"),)
 
     objects = models.Manager()
     active = ActiveStatusManager()
@@ -177,8 +180,8 @@ class AlbumFile(models.Model):
     file_type = models.PositiveSmallIntegerField(choices=FILETYPE_CHOICES)
     status = models.SmallIntegerField(choices=STATUS_CHOICES)
     albums = models.ManyToManyField('Album', related_name='albumfiles')
-    tmp_filename = models.CharField(max_length=255, null=True)
-    tmp_hostname = models.CharField(max_length=255, null=True)
+    # tmp_filename = models.CharField(max_length=255, null=True)
+    # tmp_hostname = models.CharField(max_length=255, null=True)
     created = models.DateTimeField(auto_now_add=True)
     modified = models.DateTimeField(auto_now=True)
     media_created = models.DateTimeField(null=True, blank=True)  # When the base media file was taken/created.
@@ -339,6 +342,21 @@ class EventGuest(models.Model):
     rsvp = models.SmallIntegerField(choices=RSVP_CHOICES, default=UNDECIDED)
 
     # class Meta: # comment out so event can be read-only in serializer
-    #     unique_together = ("guest", "event")
+    #     unique_together = (("guest", "event"),)
+
+class InAppNotification(models.Model):
+    created = models.DateTimeField(auto_now_add=True)
+    modified = models.DateTimeField(auto_now=True)
+
+    sender = models.ForeignKey('Account', related_name='sent_ntfs')
+    recipient = models.ForeignKey('Account', related_name='received_ntfs')
+    notification_type = models.SmallIntegerField(choices=NotificationTypes.choices())
+
+    #polymorphic generic relation (ForeignKey to multiple models)
+    content_type = models.ForeignKey(ContentType)
+    object_id = models.PositiveIntegerField()
+    content_object = GenericForeignKey('content_type', 'object_id')
+
+
 
 # EOF

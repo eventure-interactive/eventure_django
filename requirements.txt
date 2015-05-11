@@ -16,3 +16,4 @@ Pillow
 celery[redis]
 django-celery
 six
+enum34

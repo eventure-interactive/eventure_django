@@ -10,9 +10,33 @@ from celery import shared_task, chord
 from django.conf import settings
 from PIL import Image
 
-from core.models import AlbumFile, Thumbnail
+from core.models import AlbumFile, Thumbnail, InAppNotification
+from core.email_sender import send
+from django.contrib.contenttypes.models import ContentType
+from django.utils import timezone
+
+################### NOTIFICATIONS ##################
+def send_notifications(notification_type, sender_id, recipient_id, obj_model_class, obj_id):
+    "Send out notifications: email, inapp, push, sms"
+
+    inapp_ntf = send_inapp_notification.s(notification_type, sender_id, recipient_id, obj_model_class, obj_id)
+    return inapp_ntf.delay()
 
 
+def send_email(notification_type, to_email, data):
+    se = send.s(notification_type, to_email, data)
+    return se.delay()
+
+
+@shared_task(queue=settings.HOST_NAME)
+def send_inapp_notification(notification_type, sender_id, recipient_id, obj_model_class, obj_id):
+    content_type = ContentType.objects.get(app_label=AlbumFile._meta.app_label, model=obj_model_class)
+    content_object = content_type.get_object_for_this_type(pk=obj_id)
+    ntf = InAppNotification.objects.create(notification_type=notification_type, sender_id=sender_id, recipient_id=recipient_id, content_object=content_object)
+    ntf.save()
+
+
+############### ALBUMFILE PROCESSING ##############
 @shared_task
 def add(x, y):
     "Test async function."
