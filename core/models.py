@@ -12,6 +12,8 @@ from django.contrib.gis.db import models
 from django.contrib.gis.geos import Point
 from geopy.geocoders import GoogleV3
 from core.shared.const.NotificationTypes import NotificationTypes
+from jsonfield import JSONField
+from rest_framework import serializers
 import logging
 logger = logging.getLogger(__name__)
 
@@ -359,5 +361,63 @@ class InAppNotification(models.Model):
     content_object = GenericForeignKey('content_type', 'object_id')
 
 
+class Follow(models.Model):
+    PENDING = 0
+    APPROVED = 1
+    UNAPPROVED = 2
+
+    STATUS_CHOICES = (
+        (PENDING, 'PENDING'),
+        (APPROVED, 'APPROVED'),
+        (UNAPPROVED, 'UNAPPROVED')
+    )
+
+    created = models.DateTimeField(auto_now_add=True)
+    modified = models.DateTimeField(auto_now=True)
+
+    follower = models.ForeignKey('Account', related_name='followings')
+    followee = models.ForeignKey('Account', related_name='followers')
+    status = models.SmallIntegerField(choices=STATUS_CHOICES, default=PENDING)
+
+
+class EventInStreamSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Event
+        fields = ('title', 'start', 'location', 'guests')
+
+
+class Stream(models.Model):
+    EVENT_CREATE = 0
+    EVENTGUEST_ADD = 1
+
+    STREAMTYPE_CHOICES = (
+        (EVENT_CREATE, 'EVENT_CREATE'),
+        (EVENTGUEST_ADD, 'EVENTGUEST_ADD'),
+    )
+
+    created = models.DateTimeField(auto_now_add=True)
+    modified = models.DateTimeField(auto_now=True)
+
+    stream_type = models.SmallIntegerField(choices=STREAMTYPE_CHOICES)
+    data = JSONField()
+
+    sender = models.ForeignKey('Account', related_name='sent_streams')
+    recipient = models.ForeignKey('Account', related_name='streams')
+
+    #polymorphic generic relation (ForeignKey to multiple models)
+    content_type = models.ForeignKey(ContentType)
+    object_id = models.PositiveIntegerField()
+    content_object = GenericForeignKey('content_type', 'object_id')
+
+    def save(self, *args, **kwargs):
+        # Auto generate and save json presentation of data
+        serializer = None
+        if self.content_type.model_class() == Event:
+            serializer = EventInStreamSerializer(self.content_object)
+
+
+        if serializer.data is not None:
+            self.data = serializer.data
+        super(Stream, self).save(*args, **kwargs)
 
 # EOF

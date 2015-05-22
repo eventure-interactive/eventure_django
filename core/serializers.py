@@ -5,29 +5,25 @@ from django.conf import settings
 from django.utils.translation import ugettext as _
 from PIL import Image
 from rest_framework import serializers
-from .models import Account, Album, AlbumType, AlbumFile, Thumbnail, Event, EventGuest, InAppNotification
+from .models import Account, Album, AlbumType, AlbumFile, Thumbnail, Event, EventGuest, InAppNotification, Follow,\
+    Stream
 from django.utils import timezone
 import requests
 from .tasks import store_albumfile_and_thumbnails_s3
-from .tasks import send_email, send_notifications
+from .tasks import send_email, send_notifications, async_add_to_stream
 from core.shared.const.NotificationTypes import NotificationTypes
 import logging
 logger = logging.getLogger(__name__)
 
 
 class AccountSerializer(serializers.HyperlinkedModelSerializer):
-    # profile_image = serializers.SerializerMethodField('get_user_albumfile')
-
-    # def get_user_albumfile(self, obj):
-    #     user = self.context['request'].user
-    #     albumfiles = AlbumFile.objects.filter(owner=user)
-    #     serializer = AlbumFileSerializer(many=True, data=albumfiles, context={'request': self.context['request']})
-    #     serializer.is_valid()
-    #     return serializer.data
+    followers = serializers.HyperlinkedIdentityField(read_only=True, view_name='follower-list')
+    followings = serializers.HyperlinkedIdentityField(read_only=True, view_name='following-list')
+    streams = serializers.HyperlinkedIdentityField(read_only=True, view_name='stream-list')
 
     class Meta:
         model = Account
-        fields = ('url', 'name', 'email', 'profile_albumfile')
+        fields = ('url', 'name', 'email', 'profile_albumfile', 'followers', 'followings', 'streams')
 
 
 class ThumbnailSerializer(serializers.ModelSerializer):
@@ -245,6 +241,17 @@ class EventSerializer(serializers.HyperlinkedModelSerializer):
         self.send_notifications(instance)
         return instance
 
+    def create(self, validated_data):
+        event = super().create(validated_data)
+        self.add_to_stream(event)
+        return event
+
+    def add_to_stream(self, event):
+        sender = Account.objects.get(pk=self.context['request'].user.id)
+        followers = sender.followers.filter(status=Follow.APPROVED)
+        for follow in followers:
+            async_add_to_stream(Stream.EVENT_CREATE, sender.id, follow.follower.id, 'event', event.id)
+
     def send_notifications(self, event):
         notification_type = NotificationTypes.EVENT_UPDATE.value
         sender = self.context['request'].user
@@ -286,9 +293,7 @@ class EventGuestSerializer(serializers.HyperlinkedModelSerializer):
         event = self.context['event']
         if event:
             guest = EventGuest.objects.create(event=event, **validated_data)
-            if guest:
-                # Send invitation email
-                # self.send_invitation()  
+            if guest: 
                 self.send_notifications(guest.guest_id)
                 return guest
 
@@ -301,36 +306,6 @@ class EventGuestSerializer(serializers.HyperlinkedModelSerializer):
                 raise serializers.ValidationError('Cannot add same guest to event more than once')
         return data
 
-    # def send_invitation(self):
-    #     notification_type = 'invite'
-    #     # gather sender data
-    #     sender = self.context['request'].user
-    #     logger.debug(sender.phone)
-    #     data = {
-    #         'Site_Url': 'http://devapi.eventure.com/',
-
-    #         'ProfileImage': 'https://www.petfinder.com/wp-content/uploads/2012/11/dog-how-to-select-your-new-best-friend-thinkstock99062463.jpg',
-    #         'Email': sender.email,
-    #         'Phone': sender.phone,
-    #         'AccountName': sender.name,
-    #         'AccountScreenName': sender.name,
-    #     }
-    #     # gather recipient data
-    #     to_email = 'tidushue@gmail.com' #guest.email 
-    #     # gather event data
-    #     data.update({
-    #             'PlanID': 2,
-    #             'Title': 'Event ABCDEF',
-    #             'StartDate': '2015-6-1 12PM',
-    #             'Address': '123 Someplace',
-    #         })
-
-    #     # gather card data
-    #     data['Card'] = u'<a href="default.asp">\
-    #                         <img src="http://imagesdie.com/wp-content/uploads/2015/02/dog-poll-photos-videos-blogs-itimes-animals-images-dog-pictures.jpg" alt="HTML tutorial" style="width:420px;border:0">\
-    #                         </a>'
-
-    #     send_email(notification_type, to_email, data) # async task
     def send_notifications(self, guest_id):
         notification_type = NotificationTypes.EVENT_INVITE.value
         sender = self.context['request'].user
@@ -383,11 +358,138 @@ class AlbumUpdateSerializer(AlbumSerializer):
     ''' When updating album, should not allow update event '''
     event = serializers.HyperlinkedRelatedField(read_only=True, view_name='event-detail', allow_null=True)
 
+# unused
+class NotificationObjectRelatedField(serializers.RelatedField):
+    def to_representation(self, value):
+        if isinstance(value, Event):
+            serializer = EventSerializer(value, context={'request': self.context['request']})
+        elif isinstance(value, EventGuest):
+            serializer = EventGuestSerializer(value, context={'request': self.context['request']})
+        elif isinstance(value, AlbumFile):
+            serializer = AlbumFileSerializer(value, context={'request': self.context['request']})
+        else:
+            raise Exception('Unexpected type of notification object')
+
+        return serializer.data
+
 
 class InAppNotificationSerializer(serializers.HyperlinkedModelSerializer):
     content_type = serializers.CharField()
+    # content_object = NotificationObjectRelatedField(read_only=True)
 
     class Meta:
         model = InAppNotification
-        fields = ('sender', 'recipient', 'notification_type', 'content_type', 'object_id')
+        fields = ('sender', 'recipient', 'notification_type', 'content_type', 'object_id', )
+
+
+class FollowingSerializer(serializers.HyperlinkedModelSerializer):
+    status = serializers.IntegerField(read_only=True)
+    follower = serializers.HyperlinkedRelatedField(read_only=True, view_name='account-detail')
+
+    class Meta:
+        model = Follow
+        fields = ('follower', 'followee', 'status')
+
+    def create(self, validated_data):
+        follower = self.context['request'].user
+        follow = Follow.objects.create(follower=follower, **validated_data)
+        return follow
+
+    def validate(self, data):
+        ''' For creation: Unique together (follower, followee). Work-around for unique_together wont work with read-only fields (need value to validate) '''
+        if self.instance is None:  # create not update
+            follower = self.context['request'].user
+            if Follow.objects.filter(follower=follower, followee=data.get('followee')).exists():
+                raise serializers.ValidationError('Cannot follow same account more than once')
+        return data
+
+
+class FollowerHyperlinkedIdentityField(serializers.HyperlinkedIdentityField):
+    def get_url(self, obj, view_name, request, format):
+        if obj.pk is None:
+            return None
+
+        return self.reverse(view_name,
+            kwargs={
+                'follower_id': obj.follower_id,
+                'followee_id': obj.followee_id
+            },
+            request=request,
+            format=format
+        )
+
+
+class FollowerSerializer(serializers.HyperlinkedModelSerializer):
+    follower = FollowerHyperlinkedIdentityField(view_name='follower-detail')
+
+    class Meta:
+        model = Follow
+        fields = ('follower', 'status')
+
+
+class FollowerUpdateSerializer(serializers.HyperlinkedModelSerializer):
+    follower = serializers.HyperlinkedRelatedField(read_only=True, view_name='account-detail')
+
+    class Meta:
+        model = Follow
+        fields = ('follower', 'status',)
+
+"""
+class ConnectionSerializer(serializers.HyperlinkedModelSerializer):
+    connection = serializers.HyperlinkedRelatedField(source='followee', queryset=Account.objects.filter(status=Account.ACTIVE), view_name='account-detail')
+    connection_status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Follow
+        fields = ('connection', 'connection_status', )
+
+    def get_connection_status(self, obj):
+        try:
+            reverse = Follow.objects.get(follower=obj.followee, followee=obj.follower)
+        except Follow.DoesNotExist:
+            # reverse = Follow(follower=obj.followee, followee=obj.follower, status=Follow.PENDING)
+            pass
+
+        if obj.status == Follow.APPROVED and reverse.status == Follow.APPROVED:
+            return 'connected'
+        # elif Follow.UNAPPROVED in (obj.status, reverse.status):
+        #     return 'denied' 
+        # elif obj.status == Follow.APPROVED and reverse.status == Follow.PENDING:
+        #     return 'pending approval from other party'
+        # elif reverse.status == Follow.APPROVED and obj.status == Follow.PENDING:
+        #     return 'pending approval from you'
+        # elif obj.status == Follow.PENDING and reverse.status == Follow.PENDING:
+        #     return 'pending approval from both parties'
+        else:
+            return '%d %s %d, %d %s %d' % (obj.follower_id, obj.status, obj.followee_id, reverse.follower_id, reverse.status, reverse.followee_id)
+
+    def create(self, validated_data):
+        ''' Create two way following with status PENDING '''
+        follower = self.context['request'].user
+        follow, created = Follow.objects.update_or_create(follower=follower, followee=validated_data.get('followee'), defaults={'status': Follow.PENDING})
+        reverse, created = Follow.objects.update_or_create(followee=follower, follower=validated_data.get('followee'), defaults={'status': Follow.PENDING})
+        return follow
+
+
+class ConnectionUpdateSerializer(serializers.HyperlinkedModelSerializer):
+    connection = serializers.HyperlinkedRelatedField(source='follower', read_only=True, view_name='account-detail')
+
+    class Meta:
+        model = Follow
+        fields = ('connection', 'status',)
+
+    def update(self, instance, data):
+        instance = super().update(instance, data)
+        if data['status'] in (Follow.APPROVED, Follow.UNAPPROVED) and self.context['request'].user == instance.follower:
+            Follow.objects.update_or_create(follower=instance.followee, followee=instance.follower, defaults={'status': data['status']})
+        return instance
+"""
+
+
+class StreamSerializer(serializers.ModelSerializer):
+    content_type = serializers.CharField()
+
+    class Meta:
+        model = Stream
+        fields = ('stream_type', 'data', 'content_type', 'object_id')
 # EOF

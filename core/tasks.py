@@ -10,10 +10,23 @@ from celery import shared_task, chord
 from django.conf import settings
 from PIL import Image
 
-from core.models import AlbumFile, Thumbnail, InAppNotification
+from core.models import AlbumFile, Thumbnail, InAppNotification, Stream, Event
 from core.email_sender import send
 from django.contrib.contenttypes.models import ContentType
-from django.utils import timezone
+
+
+###################### STREAM #####################
+def async_add_to_stream(stream_type, sender_id, recipient_id, obj_model_class, obj_id):
+    addstream = add_to_stream.s(stream_type, sender_id, recipient_id, obj_model_class, obj_id)
+    return addstream.delay()
+
+@shared_task(queue=settings.HOST_NAME)
+def add_to_stream(stream_type, sender_id, recipient_id, obj_model_class, obj_id):
+    content_type = ContentType.objects.get(app_label=AlbumFile._meta.app_label, model=obj_model_class)
+    content_object = content_type.get_object_for_this_type(pk=obj_id)
+
+    stream = Stream.objects.create(stream_type=stream_type, sender_id=sender_id, recipient_id=recipient_id, content_object=content_object)
+
 
 ################### NOTIFICATIONS ##################
 def send_notifications(notification_type, sender_id, recipient_id, obj_model_class, obj_id):

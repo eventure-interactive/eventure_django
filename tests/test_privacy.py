@@ -14,6 +14,7 @@ from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import D
 from geopy.geocoders import GoogleV3
 import time
+from django.test.utils import override_settings
 
 
 class PrivacyTests(APITestCase):
@@ -52,6 +53,7 @@ class PrivacyTests(APITestCase):
         event_album_type = AlbumType.objects.create(id=5, name='DEFAULT_EVENT', description='Default event album', is_deletable=False, is_virtual=False, sort_order=60)
         event_album_type.save()
 
+    @override_settings(CELERY_ALWAYS_EAGER=True,)
     def testEventPrivacy(self):
 
         ''' Create event '''
@@ -68,12 +70,12 @@ class PrivacyTests(APITestCase):
         response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         album_url = response.data['albums'][0]
-        event_id = response.data['id']
+        event_url = response.data['url']
 
         ''' Upload file to event album '''
         response = self.client.get(album_url)
         files_url = response.data['files']
-        
+    
         data = {
             'source_url': '''https://upload.wikimedia.org/wikipedia/commons/8/84/Goiaba_vermelha.jpg'''
         }
@@ -84,8 +86,8 @@ class PrivacyTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
         ''' User2 cannot access event, album, albumfile since its private '''
-        url = reverse('event-detail', kwargs={'pk': event_id })
-        response = self.client2.get(url)
+        
+        response = self.client2.get(event_url)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
         response = self.client2.get(album_url)
@@ -93,9 +95,8 @@ class PrivacyTests(APITestCase):
 
         # NEED TO FIX UPLOAD FILE PROBLEM
         # time.sleep(30)
-        # response = self.client2.get(file_url)
-        # print(response.data)
+        response = self.client2.get(file_url)
+        print(response.data)
         # self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-
-
+#EOF

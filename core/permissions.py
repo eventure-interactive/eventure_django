@@ -1,5 +1,5 @@
 from rest_framework import permissions
-from core.models import Event, EventGuest, Album, AlbumFile
+from core.models import Event, EventGuest, Album, AlbumFile, Follow, Account
 import logging
 logger = logging.getLogger(__name__)
 
@@ -105,5 +105,16 @@ class IsGrantedAccessToEvent(permissions.BasePermission):
 def _is_event_member(event, account):
     ''' Check if account is owner or guest of event '''
     return event.owner == account or EventGuest.objects.filter(event=event.id, guest=account.id).exists()
+
+
+class IsAccountOwnerOrDenied(permissions.BasePermission):
+    """ For Follower List and Update view
+    Only account owner/followee can see/update his followers
+    """
+    def has_object_permission(self, request, view, obj):
+        if isinstance(obj, Follow):
+            return obj.followee == request.user
+        elif isinstance(obj, Account):
+            return obj == request.user
 
 # EOF

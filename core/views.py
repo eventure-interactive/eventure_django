@@ -9,10 +9,13 @@ from rest_framework.response import Response
 from rest_framework.reverse import reverse
 from rest_framework.compat import OrderedDict
 from rest_framework import filters
-from core.models import Account, Album, AlbumType, AlbumFile, Event, EventGuest
+from core.models import Account, Album, AlbumType, AlbumFile, Event, EventGuest, Follow
 from core.serializers import AccountSerializer, AlbumSerializer, AlbumFileSerializer, EventSerializer, \
-    EventGuestSerializer, EventGuestUpdateSerializer, AlbumUpdateSerializer, InAppNotificationSerializer
-from core.permissions import IsAccountOwnerOrReadOnly, IsAlbumUploadableOrReadOnly, IsGrantedAccessToEvent, IsGrantedAccessToAlbum
+    EventGuestSerializer, EventGuestUpdateSerializer, AlbumUpdateSerializer, InAppNotificationSerializer,\
+    FollowingSerializer, FollowerSerializer, FollowerUpdateSerializer, StreamSerializer 
+    # ConnectionSerializer, ConnectionUpdateSerializer
+from core.permissions import IsAccountOwnerOrReadOnly, IsAlbumUploadableOrReadOnly, IsGrantedAccessToEvent,\
+    IsGrantedAccessToAlbum, IsAccountOwnerOrDenied
 from django.db.models import Q
 from django.contrib.auth.models import AnonymousUser
 from django.utils.translation import ugettext as _
@@ -167,8 +170,8 @@ class EventList(generics.ListCreateAPIView):
         api/events?vicinity='costa mesa'&miles=100
             OR
         Search events using query parameters
-        api/events?min_start='2015-06-01 01:00:00'
-        api/events?title=party,event
+        api/events?min_start=2015-06-01 01:00:00
+        api/events?title=party
         api/events?location=park
         api/events?privacy=1
         api/events?owner=henry
@@ -317,4 +320,108 @@ class NotificationList(generics.ListAPIView):
             return received_ntfs.filter(created__gt=last_check).count()
         else:
             return received_ntfs.count()
+
+"""
+class ConnectionList(generics.ListCreateAPIView):
+    permission_classes = (permissions.IsAuthenticated, IsAccountOwnerOrDenied)
+    serializer_class = ConnectionSerializer
+    paginate_by = 20
+
+    def get_account(self):
+        try:
+            account = Account.objects.get(pk=self.kwargs['pk'])
+        except Account.DoesNotExist:
+            raise Http404(_('Account does not exist'))
+        else:
+            return account
+
+    def get_queryset(self):
+        ''' A connection is just a two-way following '''
+        account = self.get_account()
+        self.check_object_permissions(self.request, account)
+        # followings = account.followings.filter(status=Follow.APPROVED)
+        # connections = [flg for flg in followings if Follow.objects.filter(follower=flg.followee, followee=flg.follower, status=Follow.APPROVED).exists()]
+        
+        connections = Follow.objects.filter(follower=account) & Follow.objects.filter(followee=account).exists() 
+                                            | Q(followee=account) & Follow.objects.filter(follower=account).exists()).filter(Q(follower=account))
+
+        # connections = [follow for follow in account.followings.all() if Follow.objects.filter(followee=follow.follower).exists()]
+        return connections
+
+
+class ConnectionDetail(MultipleFieldLookupMixin, generics.RetrieveUpdateAPIView):
+    permission_classes = (permissions.IsAuthenticated, IsAccountOwnerOrDenied)
+
+    queryset = Follow.objects.all()
+    serializer_class = ConnectionUpdateSerializer
+    lookup_fields = ('follower_id', 'followee_id')
+"""
+
+class FollowingList(generics.ListCreateAPIView):
+    permission_classes = (permissions.IsAuthenticated, IsAccountOwnerOrDenied)
+
+    serializer_class = FollowingSerializer
+    paginate_by = 20
+
+    def get_account(self):
+        try:
+            account = Account.objects.get(pk=self.kwargs['pk'])
+        except Account.DoesNotExist:
+            raise Http404(_('Account does not exist'))
+        else:
+            return account
+
+    def get_queryset(self):
+        account = self.get_account()
+        self.check_object_permissions(self.request, account)
+        return account.followings.all()
+
+
+class FollowerList(generics.ListAPIView):
+    permission_classes = (permissions.IsAuthenticated, IsAccountOwnerOrDenied)
+
+    serializer_class = FollowerSerializer
+    paginate_by = 20
+
+    def get_account(self):
+        try:
+            account = Account.objects.get(pk=self.kwargs['pk'])
+        except Account.DoesNotExist:
+            raise Http404(_('Account does not exist'))
+        else:
+            return account
+
+    def get_queryset(self):
+        account = self.get_account()
+        self.check_object_permissions(self.request, account)
+        return account.followers.all()
+
+
+class FollowerDetail(MultipleFieldLookupMixin, generics.RetrieveUpdateAPIView):
+    permission_classes = (permissions.IsAuthenticated, IsAccountOwnerOrDenied)
+
+    queryset = Follow.objects.all()
+    serializer_class = FollowerUpdateSerializer
+    lookup_fields = ('follower_id', 'followee_id')
+
+
+class StreamList(generics.ListAPIView):
+    permission_classes = (permissions.IsAuthenticated, IsAccountOwnerOrDenied)
+
+    serializer_class = StreamSerializer
+    paginate_by = 20
+
+    def get_account(self):
+        try:
+            account = Account.objects.get(pk=self.kwargs['pk'])
+        except Account.DoesNotExist:
+            raise Http404(_('Account does not exist'))
+        else:
+            return account
+
+    def get_queryset(self):
+        account = self.get_account()
+        self.check_object_permissions(self.request, account)
+        return account.streams.all()
+
 #EOF
