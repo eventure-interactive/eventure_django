@@ -1,0 +1,80 @@
+﻿{% extends "email/base-layout.htm" %}
+
+{% block subject %}You have been invited to {{ Title }}{% endblock %}
+
+{% block content %}
+<table width="100%" align="center" style="text-align:center; border-collapse:collapse;">
+	<tr>
+	     <td style="padding-top:40px" >
+            {% if ProfileImage %}
+            <img src="{{ProfileImage}}" style="-moz-border-radius:50%;-webkit-border-radius:50%;border-radius:50%;max-width:120px;max-height: 120px;" />
+            {% endif %}
+	    </td>
+	</tr>
+	<tr>
+	    <td style="padding-top: 20px; padding-bottom: 43px; font-size:28px; color:#282828; font-style:normal; ">
+	        {{ AccountName }} has invited you to...
+	    </td>
+	</tr>
+    
+	<tr>
+	    <td>
+	         <a href="{{Site_Url}}events/{{PlanID}}" style="font-size:16px;font-weight: 300;color:#1f8ec2;text-decoration:none;">Click here to view the event page.</a>
+	    </td>
+	</tr>
+	<tr>
+	    <td height="40"></td>
+	</tr>
+	<tr>
+	    <td>
+	        <table width="100%">
+                <tr>
+                    <td width="42%" class="contentlabel">Event</td>
+                    <td width="58%" class="contenttxt">{{Title}}</td>
+                </tr>
+                <tr>
+                    <td width="42%" class="contentlabel">When</td>
+                    <td width="58%" class="contenttxt">{{StartDate}}</td>
+                </tr>
+                {% if Address %}
+                <tr>
+                    <td width="42%" class="contentlabel">Where</td>
+                    <td width="58%" class="contenttxt">
+                        <a href="http://maps.google.com/?q={{Address}}" style="color:#1f8ec2;text-decoration:none;">{{Address}}</a>
+                    </td>
+                </tr>
+                {% endif %}
+                {% if Phone %}
+                <tr>
+                    <td width="42%" class="contentlabel">Contact</td>
+                    <td width="58%" style="contenttxt">
+                        <a href="tel:{{Phone}}">{{Phone}}</a>
+                    </td>
+                </tr>
+                {% endif %}
+                <tr>
+                    <td width="42%" class="contentlabel">Hosted by</td>
+                    <td width="58%" class="contenttxt">
+                        <a href="{{Site_Url}}user/{{AccountScreenName}}" >{{AccountName}}</a>
+                    </td>
+                </tr>
+                {% if Notes %}
+                <tr>
+                    <td width="42%" class="contentlabel">Notes</td>
+                    <td width="58%" class="contenttxt">{{Notes}}</td>
+                </tr>
+                {% endif %}
+	        </table>
+	    </td>
+	</tr>
+	<tr>
+	    <td height="60"></td>
+	</tr>
+    {% if Card %}
+    <tr>
+        <!-- Need to put generated card image here if there is any -->
+        {{ Card }}
+    </tr>
+    {% endif %}
+</table>
+{% endblock %}

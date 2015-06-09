@@ -1,0 +1,23 @@
+{{ AccountName } has invited you to...
+
+__Event__
+{{ Title }}
+
+__When__
+{{StartDate}}
+{% if address %}
+__Where__
+{{ Address }}{% endif %}
+
+{% if Phone %}
+__Contact__
+{{ Phone }}{% endif %}
+
+__Hosted by__
+{{AccountName}}
+
+{% if Notes %}
+__Notes__
+{{Notes}}{% endif %}
+
+More information at {{Site_Url}}events/{{PlanID}}

@@ -89,7 +89,7 @@ DATABASES = {
         # 'ENGINE': 'django.db.backends.postgresql_psycopg2',
         'ENGINE': 'django.contrib.gis.db.backends.postgis',
         'NAME': 'evti',
-        'USER': 'web-dev' ,
+        'USER': 'web-dev',
         # 'USER': 'evtipgmaster',
         'PASSWORD': '1Billion',
         'HOST': 'pgdb-dev.eventure.com',
@@ -110,6 +110,15 @@ USE_I18N = True
 USE_L10N = True
 
 USE_TZ = True
+
+
+# Email Config
+EMAIL_HOST = "smtpout.secureserver.net"
+EMAIL_PORT = 465
+EMAIL_HOST_USER = "from.all.of.us@eventure.com"
+EMAIL_HOST_PASSWORD = "1Billion"
+EMAIL_USE_SSL = True
+EMAIL_FROM = "from.all.of.us@eventure.com"
 
 
 # Static files (CSS, JavaScript, Images)
