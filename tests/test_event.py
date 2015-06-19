@@ -1,6 +1,6 @@
 from django.core.urlresolvers import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from rest_framework.test import APITestCase, APITransactionTestCase
 
 # from django.contrib.auth.models import User
 from rest_framework.test import APIRequestFactory, APIClient
@@ -8,19 +8,13 @@ from core.models import Account, Album, AlbumType, AlbumFile, Thumbnail, Event, 
 from django.utils import timezone
 import datetime
 from django.test.utils import override_settings
+import time
+import json
+from core.tasks import finalize_s3_thumbnails
 
 
 class EventTests(APITestCase):
     fixtures = ['core_initial_data.json']
-    # def create_fixtures(self):
-    #     self.user = Account.objects.create(phone='+17146032364', name='Henry', password='testing')
-    #     self.user.save()
-
-    #     self.user2 = Account.objects.create(phone='+17148885070', name='Tidus', password='testing')
-    #     self.user2.save()
-
-    #     event_album_type = AlbumType.objects.create(id=5, name='DEFAULT_EVENT', description='Default event album', is_deletable=False, is_virtual=False, sort_order=60)
-    #     event_album_type.save()
 
     def setUp(self):
         # log in
@@ -61,7 +55,7 @@ class EventTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     @override_settings(CELERY_EAGER_PROPAGATES_EXCEPTIONS=True, CELERY_ALWAYS_EAGER=True,)
-    def test_create_event_success_add_guest_find_events(self):
+    def test_create_event_success_add_guest(self):
         '''
         Ensure test created successful
         '''
@@ -89,6 +83,51 @@ class EventTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
+        ''' Upload file to event album '''
+        response = self.client.get(album_url)
+        files_url = response.data['files']
+
+        data = {
+            'source_url': '''https://upload.wikimedia.org/wikipedia/commons/thumb/3/38/Shopping_Center_Magna_Plaza_Amsterdam_2014.jpg/1280px-Shopping_Center_Magna_Plaza_Amsterdam_2014.jpg''',
+            'name': 'half dome 2',
+        }
+        response = self.client.post(files_url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        ''' Make sure file is uploaded and thumbnails proccessed. '''
+        # NEED TO FIX CELERY PROBLEM: daemon's database is not test runner's database
+        # response = self.client.get(files_url)
+        # self.assertTrue(response.data['count'] > 0)
+
+        # ALTENATELY: assume AWS lambda does it job, just check the celery thumbnail task
+
+        last_af = AlbumFile.objects.latest('created')
+
+        thumbnails_data = self.create_thumbnails_fixtures(last_af.s3_key, last_af.s3_bucket)
+        finalize_s3_thumbnails.delay(json.dumps(thumbnails_data))
+
+        ''' Make sure AlbumFile is done processing '''
+        last_af = AlbumFile.objects.get(pk=last_af.id) # refresh the albumfile data
+        self.assertEqual(last_af.status, AlbumFile.ACTIVE)
+
+        ''' Make sure all thumbnails are saved '''
+        self.assertTrue(Thumbnail.objects.filter(albumfile_id=last_af.id).count() == 7)
+
+    def test_find_events(self):
+        # Create event
+        url = reverse('event-list')
+
+        now = timezone.now()
+        data = {'title': 'Event Crazy',
+                'start': (now + datetime.timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                'end': (now + datetime.timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                'location': '3420 Bristol Street, Costa Mesa, CA 92626',
+                }
+
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        event_url = response.data['url']
+
         ''' Find all events in a radius of 100 miles of a random location '''
         url = reverse('event-list')
         miles = '100'
@@ -99,22 +138,32 @@ class EventTests(APITestCase):
         found_events = list(filter(lambda ev: ev['url'] == event_url, response.data['results']))
         self.assertTrue(len(found_events) > 0)
 
-        ''' Upload file to event album '''
-        response = self.client.get(album_url)
-        files_url = response.data['files']
+        ''' Find events using title '''
+        url = reverse('event-list') + "?title=Event Crazy"
+        response = self.client.get(url)
+        self.assertEqual(response.data['count'], 1)
 
+    def create_thumbnails_fixtures(self, image_key, bucket):
+        image_key = image_key.replace(".jpeg", "")
         data = {
-            'source_url': '''https://upload.wikimedia.org/wikipedia/commons/8/84/Goiaba_vermelha.jpg'''
+            "srcKey": image_key + ".jpeg",
+            "srcBucket": bucket,
+            'thumbnailResults': {},
         }
-        response = self.client.post(files_url, data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        photos = AlbumFile.objects.all()
-        self.assertTrue(len(photos) > 0)
 
-        # print(photos[0].status)
-        # print(photos[0].tmp_filename)
-        response = self.client.get(files_url)
-        print(response.data)
+        for size in ["48", "100", "144", "205", "320", "610", "960"]:
+            thumbnail_data = {
+                size: {
+                    "Bucket": bucket + "-thumbnail",
+                    "Key":  "%s_S%s.jpeg" % (image_key, size),
+                    "SizeBytes": 1277,
+                    "Width": int(size),
+                    "Height": 31,
+                    "Url": "https://%s-thumbnail.s3.amazonaws.com/%s_S%s.jpeg" % (bucket, image_key, size)
+                }
+            }
+            data["thumbnailResults"].update(thumbnail_data)
 
+        return data
 
 # EOF

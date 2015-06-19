@@ -20,14 +20,14 @@ from django.test.utils import override_settings
 class PrivacyTests(APITestCase):
     """
     Permission Rules:
-    + Event: 
+    + Event:
         = Public: all can read, only owner can write
         = Private: only owner or guests can read/write
     + EventGuest: inherit from its Event
-    + Album: 
+    + Album:
         = Event Album: inherit from its Event, guest, owner can post media
         = Non Event Album: only owner can read/write/create
-    + AlbumFile: inherit from its Album, 
+    + AlbumFile: inherit from its Album,
     """
     def setUp(self):
         # create new user account
@@ -54,9 +54,9 @@ class PrivacyTests(APITestCase):
         event_album_type.save()
 
     @override_settings(CELERY_ALWAYS_EAGER=True,)
-    def testEventPrivacy(self):
+    def test_event_privacy(self):
 
-        ''' Create event '''
+        # Create event
         url = reverse('event-list')
 
         now = timezone.now()
@@ -75,7 +75,7 @@ class PrivacyTests(APITestCase):
         ''' Upload file to event album '''
         response = self.client.get(album_url)
         files_url = response.data['files']
-    
+
         data = {
             'source_url': '''https://upload.wikimedia.org/wikipedia/commons/8/84/Goiaba_vermelha.jpg'''
         }
@@ -86,17 +86,21 @@ class PrivacyTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
         ''' User2 cannot access event, album, albumfile since its private '''
-        
+
         response = self.client2.get(event_url)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
         response = self.client2.get(album_url)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-        # NEED TO FIX UPLOAD FILE PROBLEM
+        
+        response = self.client2.get(files_url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+        # NEED TO FIX CELERY PROBLEM: daemon's database is not test runner's database
         # time.sleep(30)
-        response = self.client2.get(file_url)
-        print(response.data)
-        # self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        # response = self.client.get(files_url)
+        # print(response.data)
+        # print(response.status_code)
 
 #EOF

@@ -24,7 +24,7 @@ def async_add_to_stream(stream_type, sender_id, recipient_id, obj_model_class, o
     addstream = add_to_stream.s(stream_type, sender_id, recipient_id, obj_model_class, obj_id)
     return addstream.delay()
 
-@shared_task(queue=settings.HOST_NAME)
+@shared_task
 def add_to_stream(stream_type, sender_id, recipient_id, obj_model_class, obj_id):
     content_type = ContentType.objects.get(app_label=AlbumFile._meta.app_label, model=obj_model_class)
     content_object = content_type.get_object_for_this_type(pk=obj_id)
@@ -45,7 +45,7 @@ def send_email(notification_type, to_email, data):
     return se.delay()
 
 
-@shared_task(queue=settings.HOST_NAME)
+@shared_task
 def send_inapp_notification(notification_type, sender_id, recipient_id, obj_model_class, obj_id):
     content_type = ContentType.objects.get(app_label=AlbumFile._meta.app_label, model=obj_model_class)
     content_object = content_type.get_object_for_this_type(pk=obj_id)
@@ -91,7 +91,7 @@ def finalize_s3_thumbnails(json_data):
 
     logger.info('exist_thumb %s', exist_thumb)
 
-    for size, new_data in thumb_results.iteritems():
+    for size, new_data in thumb_results.items():
         logger.info('Looking for size %r', size)
         thumb = exist_thumb.get(size) or Thumbnail()
 

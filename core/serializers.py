@@ -320,7 +320,7 @@ class EventGuestUpdateSerializer(EventGuestSerializer):
 
 class AlbumSerializer(serializers.HyperlinkedModelSerializer):
 
-    album_type = AlbumTypeSerializer(read_only=True, default=AlbumType.objects.get(name='CUSTOM'))
+    album_type = AlbumTypeSerializer(read_only=True, default=0)
     files = serializers.HyperlinkedIdentityField(view_name='albumfiles-list')
     event = serializers.HyperlinkedRelatedField(queryset=Event.objects.all(), view_name='event-detail', allow_null=True,)
     # owner = serializers.HiddenField(default=serializers.CurrentUserDefault())

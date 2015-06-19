@@ -158,10 +158,12 @@ exports.handler = function(event, context) {
 		function finalizeResults(results, next) {
 			console.log("Got doIt parallel results of :\n", util.inspect(results, {depth: 5}));
 			var queue = null;
-			
-			if (srcKey.indexOf('dev') === 0) {
-				queue = "https://sqs.us-east-1.amazonaws.com/435327525078/dev-celery";
+
+			var queueMatch = srcKey.match(/(.*?)\//); // Match non-greedily until we hit the first slash
+			if (queueMatch !== null) {
+				queue = 'https://sqs.us-east-1.amazonaws.com/435327525078/' + queueMatch[1] + '-celery';
 			}
+
 			if (queue) {
 				var msg_id = uuid.v4();
 				var msg_envelope = {
