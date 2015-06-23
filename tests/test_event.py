@@ -1,9 +1,6 @@
 from django.core.urlresolvers import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase, APITransactionTestCase
-
-# from django.contrib.auth.models import User
-from rest_framework.test import APIRequestFactory, APIClient
+from rest_framework.test import APITestCase, APIClient
 from core.models import Account, Album, AlbumType, AlbumFile, Thumbnail, Event, EventGuest
 from django.utils import timezone
 import datetime
@@ -73,6 +70,7 @@ class EventTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         album_url = response.data['albums'][0]
         event_url = response.data['url']
+        guests_url = response.data['guests']
 
         ''' Invite guest'''
         url = response.data['guests']
@@ -80,8 +78,13 @@ class EventTests(APITestCase):
             'guest': reverse('account-detail', kwargs={'pk': self.user2.id}),
         }
         response = self.client.post(url, data, format='json')
-
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        ''' Check guest list and first guest detail'''
+        response = self.client.get(guests_url)
+        eventguest_url = response.data['results'][0]['url']
+        response = self.client.get(eventguest_url)
+        self.assertEqual(response.data['guest'], 'http://testserver' + reverse('account-detail', kwargs={'pk': self.user2.id}))
 
         ''' Upload file to event album '''
         response = self.client.get(album_url)
@@ -100,7 +103,6 @@ class EventTests(APITestCase):
         # self.assertTrue(response.data['count'] > 0)
 
         # ALTENATELY: assume AWS lambda does it job, just check the celery thumbnail task
-
         last_af = AlbumFile.objects.latest('created')
 
         thumbnails_data = self.create_thumbnails_fixtures(last_af.s3_key, last_af.s3_bucket)
@@ -166,4 +168,41 @@ class EventTests(APITestCase):
 
         return data
 
+    def test_add_guest_in_bulk(self):
+        self.user3 = Account.objects.get(phone='+16572001110')
+        # Create event
+        url = reverse('event-list')
+
+        now = timezone.now()
+        data = {'title': 'Event Crazy',
+                'start': (now + datetime.timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                'end': (now + datetime.timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                'location': '3420 Bristol Street, Costa Mesa, CA 92626',
+                }
+
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        event_url = response.data['url']
+        guests_url = response.data['guests']
+
+        # Invite multiple guests
+        data = [{'guest': reverse('account-detail', kwargs={'pk': self.user2.id})},
+                {'guest': reverse('account-detail', kwargs={'pk': self.user3.id})}
+                ]
+        response = self.client.post(guests_url, json.dumps(data), content_type='application/json')
+
+        # assert returned guests are correct
+        all_guests = ['http://testserver' + g['guest'] for g in data]
+        for guest in response.data[0]:
+            self.assertIn(guest['guest'], all_guests)
+
+    def test_anonymous_user_searches_event(self):
+        # Get events
+        url = reverse('event-list')
+        self.anonymous_client = APIClient()
+        response = self.anonymous_client.get(url)
+
+        # assert Only PUBLIC events returned
+        for event in response.data['results']:
+            self.assertEqual(event['privacy'], Event.PUBLIC)
 # EOF

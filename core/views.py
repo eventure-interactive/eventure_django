@@ -180,7 +180,7 @@ class EventList(generics.ListCreateAPIView):
     URL_PARAM_VICINITY = 'vicinity'
     URL_PARAM_MILES = 'miles'
 
-    permission_classes = (permissions.IsAuthenticated,)
+    # permission_classes = (permissions.IsAuthenticated,)
     serializer_class = EventSerializer
     paginate_by = 20
 
@@ -206,24 +206,21 @@ class EventList(generics.ListCreateAPIView):
         miles = self.request.QUERY_PARAMS.get(self.URL_PARAM_MILES)
         vicinity = self.request.QUERY_PARAMS.get(self.URL_PARAM_VICINITY)
 
+        events = Event.objects.all()
+
         if miles and vicinity:
             geolocator = GoogleV3()
             location = geolocator.geocode(vicinity)
             point = Point(location.longitude, location.latitude)
-            events = Event.objects.filter(mpoint__dwithin=(point, D(mi=miles)))
+            events = Event.objects.filter(mpoint__dwithin=(point, D(mi=miles)))            
 
-            # No private events what user dont own or guest of should be shown
-            if isinstance(self.request.user, AnonymousUser):
-                events = events.filter(privacy=Event.PUBLIC)
-            else:
-                events = events.exclude(Q(privacy=Event.PRIVATE),
-                                        ~Q(owner=self.request.user) & ~Q(eventguest__guest=self.request.user))
-            return events
+        # No private events what user dont own or guest of should be shown
+        if isinstance(self.request.user, AnonymousUser):
+            events = events.filter(privacy=Event.PUBLIC)
         else:
-            # No private events that user dont own or guest of should be shown
-            owner_guest = ~Q(owner=self.request.user) & ~Q(eventguest__guest=self.request.user)
-            qs = Event.objects.exclude(Q(privacy=Event.PRIVATE), owner_guest)
-            return qs.prefetch_related('albums', 'guests')
+            events = events.exclude(Q(privacy=Event.PRIVATE),
+                                    ~Q(owner=self.request.user) & ~Q(eventguest__guest=self.request.user))
+        return events
 
 
 class EventDetail(generics.RetrieveUpdateDestroyAPIView):
@@ -321,41 +318,6 @@ class NotificationList(generics.ListAPIView):
         else:
             return received_ntfs.count()
 
-"""
-class ConnectionList(generics.ListCreateAPIView):
-    permission_classes = (permissions.IsAuthenticated, IsAccountOwnerOrDenied)
-    serializer_class = ConnectionSerializer
-    paginate_by = 20
-
-    def get_account(self):
-        try:
-            account = Account.objects.get(pk=self.kwargs['pk'])
-        except Account.DoesNotExist:
-            raise Http404(_('Account does not exist'))
-        else:
-            return account
-
-    def get_queryset(self):
-        ''' A connection is just a two-way following '''
-        account = self.get_account()
-        self.check_object_permissions(self.request, account)
-        # followings = account.followings.filter(status=Follow.APPROVED)
-        # connections = [flg for flg in followings if Follow.objects.filter(follower=flg.followee, followee=flg.follower, status=Follow.APPROVED).exists()]
-        
-        connections = Follow.objects.filter(follower=account) & Follow.objects.filter(followee=account).exists() 
-                                            | Q(followee=account) & Follow.objects.filter(follower=account).exists()).filter(Q(follower=account))
-
-        # connections = [follow for follow in account.followings.all() if Follow.objects.filter(followee=follow.follower).exists()]
-        return connections
-
-
-class ConnectionDetail(MultipleFieldLookupMixin, generics.RetrieveUpdateAPIView):
-    permission_classes = (permissions.IsAuthenticated, IsAccountOwnerOrDenied)
-
-    queryset = Follow.objects.all()
-    serializer_class = ConnectionUpdateSerializer
-    lookup_fields = ('follower_id', 'followee_id')
-"""
 
 class FollowingList(generics.ListCreateAPIView):
     permission_classes = (permissions.IsAuthenticated, IsAccountOwnerOrDenied)

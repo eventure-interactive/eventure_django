@@ -29,15 +29,8 @@ class PrivacyTests(APITestCase):
         = Non Event Album: only owner can read/write/create
     + AlbumFile: inherit from its Album,
     """
+    fixtures = ['core_initial_data.json']
     def setUp(self):
-        # create new user account
-        self.user = Account.objects.create(phone='+17146032364', name='Henry', password='testing')
-        self.user.save()
-
-        self.user2 = Account.objects.create(phone='+17148885070', name='Tidus', password='testing')
-        self.user2.save()
-
-        self._add_required_data()
         # user log in
         self.user = Account.objects.get(phone='+17146032364')
         self.client = APIClient()
@@ -47,11 +40,6 @@ class PrivacyTests(APITestCase):
         self.client2 = APIClient()
         self.client2.force_authenticate(user=self.user2)
 
-    def _add_required_data(self):
-        ''' Some operations need a certain data '''
-        # Event creation will create default Album which needs AlbumType DEFAULT_EVENT
-        event_album_type = AlbumType.objects.create(id=5, name='DEFAULT_EVENT', description='Default event album', is_deletable=False, is_virtual=False, sort_order=60)
-        event_album_type.save()
 
     @override_settings(CELERY_ALWAYS_EAGER=True,)
     def test_event_privacy(self):

@@ -91,12 +91,11 @@ DATABASES = {
         'ENGINE': 'django.contrib.gis.db.backends.postgis',
         'NAME': 'evti',
         'USER': 'web-dev',
-        # 'USER': 'evtipgmaster',
         'PASSWORD': '1Billion',
         'HOST': 'pgdb-dev.eventure.com',
         'PORT': 5432,
     }
-}
+} 
 
 
 # Internationalization
