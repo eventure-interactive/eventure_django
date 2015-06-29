@@ -116,7 +116,7 @@ class AlbumFileSerializer(serializers.HyperlinkedModelSerializer):
             raise serializers.ValidationError(_("Uploading videos not yet supported."))
 
         if not (data.content_type.startswith('image/') or data.content_type.startswith('video/')):
-            msg = _("Url needs to contain an image.")  # TODO: Or a video
+            msg = _("Source file needs to be an image.")  # TODO: Or a video
             raise serializers.ValidationError(msg)
 
         img_data = self._validate_img_file(data)
@@ -126,8 +126,8 @@ class AlbumFileSerializer(serializers.HyperlinkedModelSerializer):
 
         return data
 
-    def _get_tmpfile(self):
-        return tempfile.NamedTemporaryFile(dir=settings.TEMP_ALBUMFILE_DIR, prefix='img', delete=False)
+    # def _get_tmpfile(self):
+    #     return tempfile.NamedTemporaryFile(dir=settings.TEMP_ALBUMFILE_DIR, prefix='img', delete=False)
 
     def _validate_img_file(self, imgfile):
         "Bare validation to make sure what was uploaded is a parseable image."
@@ -342,18 +342,18 @@ class AlbumUpdateSerializer(AlbumSerializer):
     event = serializers.HyperlinkedRelatedField(read_only=True, view_name='event-detail', allow_null=True)
 
 # unused
-class NotificationObjectRelatedField(serializers.RelatedField):
-    def to_representation(self, value):
-        if isinstance(value, Event):
-            serializer = EventSerializer(value, context={'request': self.context['request']})
-        elif isinstance(value, EventGuest):
-            serializer = EventGuestSerializer(value, context={'request': self.context['request']})
-        elif isinstance(value, AlbumFile):
-            serializer = AlbumFileSerializer(value, context={'request': self.context['request']})
-        else:
-            raise Exception('Unexpected type of notification object')
+# class NotificationObjectRelatedField(serializers.RelatedField):
+#     def to_representation(self, value):
+#         if isinstance(value, Event):
+#             serializer = EventSerializer(value, context={'request': self.context['request']})
+#         elif isinstance(value, EventGuest):
+#             serializer = EventGuestSerializer(value, context={'request': self.context['request']})
+#         elif isinstance(value, AlbumFile):
+#             serializer = AlbumFileSerializer(value, context={'request': self.context['request']})
+#         else:
+#             raise Exception('Unexpected type of notification object')
 
-        return serializer.data
+#         return serializer.data
 
 
 class InAppNotificationSerializer(serializers.HyperlinkedModelSerializer):

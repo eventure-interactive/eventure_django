@@ -44,15 +44,23 @@ class EventTests(APITestCase):
 
         now = timezone.now()
         data = {'title': 'Test Event 2',
-            'start' : now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            'start' : (now + datetime.timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ"),
             'end'   : (now - datetime.timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")}
 
         response = self.client.post(url, data, format='json')
-
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['non_field_errors'], ['End Date must be later than Start Date'])
+
+        data = {'title': 'Test Event 2',
+            'start' : (now - datetime.timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            'end'   : (now + datetime.timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")}
+
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['start'], ['Start Date must not be in the past'])
 
     @override_settings(CELERY_EAGER_PROPAGATES_EXCEPTIONS=True, CELERY_ALWAYS_EAGER=True,)
-    def test_create_event_success_add_guest(self):
+    def test_create_update_event_add_guest(self):
         '''
         Ensure test created successful
         '''
@@ -86,6 +94,11 @@ class EventTests(APITestCase):
         response = self.client.get(eventguest_url)
         self.assertEqual(response.data['guest'], 'http://testserver' + reverse('account-detail', kwargs={'pk': self.user2.id}))
 
+        ''' Update guest reservation '''
+        response = self.client.put(eventguest_url, {'rsvp': 2})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['rsvp'], 2)
+
         ''' Upload file to event album '''
         response = self.client.get(album_url)
         files_url = response.data['files']
@@ -102,7 +115,7 @@ class EventTests(APITestCase):
         # response = self.client.get(files_url)
         # self.assertTrue(response.data['count'] > 0)
 
-        # ALTENATELY: assume AWS lambda does it job, just check the celery thumbnail task
+        # ALTERNATIVE: assume AWS lambda does it job, just check the celery thumbnail task
         last_af = AlbumFile.objects.latest('created')
 
         thumbnails_data = self.create_thumbnails_fixtures(last_af.s3_key, last_af.s3_bucket)
@@ -114,6 +127,15 @@ class EventTests(APITestCase):
 
         ''' Make sure all thumbnails are saved '''
         self.assertTrue(Thumbnail.objects.filter(albumfile_id=last_af.id).count() == 7)
+
+        ''' Update event '''
+        new_title = 'New title'
+        new_start = (now + datetime.timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        response = self.client.patch(event_url, {'title': new_title, 'start': new_start})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['title'], new_title)
+        self.assertEqual(response.data['start'], new_start)
 
     def test_find_events(self):
         # Create event

@@ -80,8 +80,25 @@ class AccountSelfDetail(generics.RetrieveUpdateAPIView):
         return get_object_or_404(qs, id=self.request.user.id)
 
 
+class AlbumFilter(django_filters.FilterSet):
+    name = django_filters.CharFilter(name='name', lookup_type='icontains')
+    album_type = django_filters.NumberFilter(name='album_type__id')
+
+    class Meta:
+        model = Album
+        fields = ['name', 'album_type']
+
+
 class AlbumList(generics.ListCreateAPIView):
-    "Shows the current account's active albums and albums of events he is a guest of"
+    """Shows the current account's active albums and albums of events he is a guest of
+        OR
+        Search album by name: /albums/?name=celebrate
+        Search album by type: /albums/?album_type=5
+    """
+    serializer_class = AlbumSerializer
+    permission_classes = (permissions.IsAuthenticated,)
+
+    filter_class = AlbumFilter
 
     def get_queryset(self):
         ''' Include only albums user owns or event albums that user owns or guest of'''
@@ -99,9 +116,6 @@ class AlbumList(generics.ListCreateAPIView):
         else:
             event_album_type = AlbumType.objects.get(name='DEFAULT_EVENT')
             serializer.save(album_type=event_album_type)
-
-    serializer_class = AlbumSerializer
-    permission_classes = (permissions.IsAuthenticated,)
 
 
 class AlbumDetail(generics.RetrieveUpdateDestroyAPIView):
@@ -228,6 +242,20 @@ class EventDetail(generics.RetrieveUpdateDestroyAPIView):
 
     queryset = Event.objects.all().select_related('owner')
     serializer_class = EventSerializer
+
+    def update(self, request, *args, **kwargs):
+        ''' Update or partial update '''
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+
+        # Update request.data with the existing data from instance,
+        # Note: set partial=True on get_serializer does not work
+        if partial:
+            for att in instance.__dict__.keys():
+                if att not in request.data.dict().keys():
+                    request.data[att] = instance.__dict__[att]
+
+        return super().update(request, *args, **kwargs)
 
 
 class EventGuestList(generics.ListCreateAPIView):
