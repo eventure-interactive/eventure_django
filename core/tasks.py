@@ -13,7 +13,7 @@ from django.conf import settings
 from PIL import Image
 
 from core.models import AlbumFile, Thumbnail, InAppNotification, Stream, Event
-from core.email_sender import send
+from core.email_sender import send_email
 from django.contrib.contenttypes.models import ContentType
 
 logger = logging.getLogger('core.tasks')
@@ -33,16 +33,12 @@ def add_to_stream(stream_type, sender_id, recipient_id, obj_model_class, obj_id)
 
 
 ################### NOTIFICATIONS ##################
-def send_notifications(notification_type, sender_id, recipient_id, obj_model_class, obj_id):
+def async_send_notifications(notification_type, sender_id, recipient_id, obj_model_class, obj_id):
     "Send out notifications: email, inapp, push, sms"
 
-    inapp_ntf = send_inapp_notification.s(notification_type, sender_id, recipient_id, obj_model_class, obj_id)
-    return inapp_ntf.delay()
+    send_inapp_notification.s(notification_type, sender_id, recipient_id, obj_model_class, obj_id).delay()
 
-
-def send_email(notification_type, to_email, data):
-    se = send.s(notification_type, to_email, data)
-    return se.delay()
+    send_email.s(notification_type, sender_id, recipient_id, obj_model_class, obj_id).delay()
 
 
 @shared_task

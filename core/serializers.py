@@ -9,8 +9,9 @@ from .models import Account, Album, AlbumType, AlbumFile, Thumbnail, Event, Even
     Stream
 from django.utils import timezone
 import requests
-from .tasks import send_notifications, async_add_to_stream
+from .tasks import async_send_notifications, async_add_to_stream
 from core.shared.const.NotificationTypes import NotificationTypes
+from core.email_sender import send_email
 import logging
 logger = logging.getLogger(__name__)
 
@@ -190,7 +191,7 @@ class AlbumFileSerializer(serializers.HyperlinkedModelSerializer):
         notification_type = NotificationTypes.ALBUMFILE_UPLOAD.value
         sender = self.context['request'].user
         for guest in guests:
-            send_notifications(notification_type, sender.id, guest.id, 'albumfile', albumfile.id)
+            async_send_notifications(notification_type, sender.id, guest.id, 'albumfile', albumfile.id)
 
 
 class EventSerializer(serializers.HyperlinkedModelSerializer):
@@ -240,7 +241,7 @@ class EventSerializer(serializers.HyperlinkedModelSerializer):
         sender = self.context['request'].user
         guests = event.guests.all()
         for guest in guests:
-            send_notifications(notification_type, sender.id, guest.id, 'event', event.id)
+            async_send_notifications(notification_type, sender.id, guest.id, 'event', event.id)
 
 
 class EventGuestHyperlinkedIdentityField(serializers.HyperlinkedIdentityField):
@@ -276,7 +277,7 @@ class EventGuestSerializer(serializers.HyperlinkedModelSerializer):
         event = self.context['event']
         if event:
             guest = EventGuest.objects.create(event=event, **validated_data)
-            if guest: 
+            if guest:
                 self.send_notifications(guest.guest_id)
                 return guest
 
@@ -294,7 +295,7 @@ class EventGuestSerializer(serializers.HyperlinkedModelSerializer):
         sender = self.context['request'].user
         event = self.context['event']
 
-        send_notifications(notification_type, sender.id, guest_id, 'event', event.id)  # async
+        async_send_notifications(notification_type, sender.id, guest_id, 'event', event.id)  # async
 
 
 class EventGuestUpdateSerializer(EventGuestSerializer):
@@ -315,7 +316,7 @@ class EventGuestUpdateSerializer(EventGuestSerializer):
         event = eventguest.event
         recipient = event.owner
 
-        send_notifications(notification_type, sender.id, recipient.id, 'eventguest', eventguest.id)  # async
+        async_send_notifications(notification_type, sender.id, recipient.id, 'eventguest', eventguest.id)  # async
 
 
 class AlbumSerializer(serializers.HyperlinkedModelSerializer):

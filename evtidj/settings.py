@@ -92,7 +92,7 @@ DATABASES = {
         'NAME': 'evti',
         'USER': 'web-dev',
         'PASSWORD': '1Billion',
-        'HOST': 'pgdb-dev.eventure.com',
+        'HOST': 'localhost',  # 'pgdb-dev.eventure.com',
         'PORT': 5432,
     }
 } 
@@ -177,7 +177,7 @@ LOGGING = {
 AWS_MEDIA_ACCESS_KEY = 'AKIAIUIZFAO5NV43556Q'
 AWS_MEDIA_SECRET_KEY = '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'
 S3_MEDIA_UPLOAD_BUCKET = 'evtimedia'
-S3_MEDIA_KEY_PREFIX = 'dev/'
+S3_MEDIA_KEY_PREFIX = 'dev-hn/'
 S3_MEDIA_REGION = 'us-east-1'
 
 
@@ -193,7 +193,7 @@ CELERY_ENABLE_UTC = True
 CELERY_DISABLE_RATE_LIMITS = True
 BROKER_URL = 'sqs://{}:{}@'.format(AWS_MEDIA_ACCESS_KEY, quote(AWS_MEDIA_SECRET_KEY, safe=''))
 BROKER_TRANSPORT_OPTIONS = {
-    'queue_name_prefix': 'dev-',
+    'queue_name_prefix': 'dev-hn-',
     'visibility_timeout': 60,  # seconds
     'wait_time_seconds': 20,   # Long-polling
 }
