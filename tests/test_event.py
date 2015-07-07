@@ -8,6 +8,7 @@ from django.test.utils import override_settings
 import time
 import json
 from core.tasks import finalize_s3_thumbnails
+from django.core import mail
 
 
 class EventTests(APITestCase):
@@ -22,6 +23,9 @@ class EventTests(APITestCase):
         self.user2 = Account.objects.get(phone='+17148885070')
         self.client2 = APIClient()
         self.client2.force_authenticate(user=self.user2)
+
+        self.user2.email = 'tidushue@gmail.com'
+        self.user2.save()
 
     def test_create_event_start_date_in_the_future(self):
         '''
@@ -68,7 +72,8 @@ class EventTests(APITestCase):
         url = reverse('event-list')
 
         now = timezone.now()
-        data = {'title': 'Test Event 3',
+        event_title = 'Test Event for Create Update Event Add Guest'
+        data = {'title': event_title,
                 'start': (now + datetime.timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 'end': (now + datetime.timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 'location': '3420 Bristol Street, Costa Mesa, CA 92626',
@@ -80,13 +85,22 @@ class EventTests(APITestCase):
         event_url = response.data['url']
         guests_url = response.data['guests']
 
-        ''' Invite guest'''
+        ''' Invite guest user2. user2 should have notifications'''
         url = response.data['guests']
         data = {
             'guest': reverse('account-detail', kwargs={'pk': self.user2.id}),
         }
         response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        ''' Check user2 has invite email '''
+        invite_mail = mail.outbox[0]
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(invite_mail.subject, 'You have been invited to %s' % (event_title))
+        self.assertIn(self.user2.email, invite_mail.to)
+        # print(invite_mail.body)
+        # print(invite_mail.alternatives)
+
 
         ''' Check guest list and first guest detail'''
         response = self.client.get(guests_url)
