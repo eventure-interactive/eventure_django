@@ -65,6 +65,14 @@ class Account(AbstractBaseUser, PermissionsMixin):
         (DEACTIVE_FORCEFULLY, 'Forcefully Inactivated'),
     )
 
+    PUBLIC = 0
+    PRIVATE = 2
+
+    PRIVACY_CHOICES = (
+        (PUBLIC, 'Public'),
+        (PRIVATE, 'Private'),
+    )
+
     phone = models.CharField(unique=True, max_length=40, validators=[RegexValidator(r'\+?[0-9(). -]')])
     name = models.CharField(max_length=255)
     status = models.SmallIntegerField(choices=STATUS_CHOICES, default=SIGNED_UP)
@@ -74,6 +82,7 @@ class Account(AbstractBaseUser, PermissionsMixin):
     date_joined = models.DateTimeField(default=timezone.now)
     email = models.CharField(unique=True, max_length=100, validators=[EmailValidator()], null=True)
     last_ntf_checked = models.DateTimeField(null=True)
+    profile_privacy = models.PositiveSmallIntegerField(choices=PRIVACY_CHOICES, default=PUBLIC)
     profile_albumfile = models.ForeignKey('AlbumFile', blank=True, null=True)
 
     objects = AccountUserManager()
@@ -111,6 +120,38 @@ class Account(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return self.get_short_name()
+
+
+class EventPrivacy(object):
+    "Helper to define Event Privacy enums (used in Account Settings and Events)."
+
+    PUBLIC = 1
+    PRIVATE = 2
+
+    PRIVACY_CHOICES = (
+        (PUBLIC, 'Public'),
+        (PRIVATE, 'Private'),
+    )
+
+
+class AccountSettings(models.Model):
+
+    class Meta:
+        verbose_name_plural = "account settings"
+
+    account = models.OneToOneField(Account, primary_key=True)
+    email_rsvp_updates = models.BooleanField(default=True)
+    email_social_activity = models.BooleanField(default=True)
+    email_promotions = models.BooleanField(default=True)
+    text_rsvp_updates = models.NullBooleanField()
+    text_social_activity = models.NullBooleanField()
+    text_promotions = models.NullBooleanField()
+    default_event_privacy = models.PositiveSmallIntegerField(choices=EventPrivacy.PRIVACY_CHOICES, default=EventPrivacy.PRIVATE)
+    created = models.DateTimeField(auto_now_add=True)
+    modified = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return "AccountSettings {}".format(self.account_id)
 
 
 class AlbumType(models.Model):
@@ -319,13 +360,9 @@ class Thumbnail(models.Model):
 
 
 class Event(models.Model):
-    PUBLIC = 1
-    PRIVATE = 2
 
-    PRIVACY_CHOICES = (
-        (PUBLIC, 'Public'),
-        (PRIVATE, 'Private'),
-    )
+    PRIVATE = EventPrivacy.PRIVATE
+    PUBLIC = EventPrivacy.PUBLIC
 
     created = models.DateTimeField(auto_now_add=True)
     modified = models.DateTimeField(auto_now=True)
@@ -336,7 +373,7 @@ class Event(models.Model):
     owner = models.ForeignKey('Account', related_name='events')
     guests = models.ManyToManyField('Account', through='EventGuest')
 
-    privacy = models.SmallIntegerField(choices=PRIVACY_CHOICES, default=PUBLIC)
+    privacy = models.SmallIntegerField(choices=EventPrivacy.PRIVACY_CHOICES, default=PUBLIC)
 
     location = models.CharField(max_length=250, null=True)
     lon = models.FloatField(null=True)
