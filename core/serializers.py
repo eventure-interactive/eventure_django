@@ -5,8 +5,8 @@ from django.conf import settings
 from django.utils.translation import ugettext as _
 from PIL import Image
 from rest_framework import serializers
-from .models import Account, Album, AlbumType, AlbumFile, Thumbnail, Event, EventGuest, InAppNotification, Follow,\
-    Stream
+from .models import Account, AccountSettings, Album, AlbumType, AlbumFile, Thumbnail, Event, EventGuest, InAppNotification, \
+    Follow, Stream
 from django.utils import timezone
 import requests
 from .tasks import async_send_notifications, async_add_to_stream
@@ -24,6 +24,44 @@ class AccountSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = Account
         fields = ('url', 'name', 'email', 'profile_albumfile', 'followers', 'followings', 'streams')
+
+
+class SettingsProfilePrivacyField(serializers.ChoiceField):
+
+    def to_representation(self, value):
+        return value
+
+
+class AccountSettingsSerializer(serializers.HyperlinkedModelSerializer):
+
+    account = serializers.HyperlinkedIdentityField(read_only=True, view_name='account-detail')
+    profile_privacy = SettingsProfilePrivacyField(source='account.profile_privacy', choices=Account.PRIVACY_CHOICES,
+                                                  required=False)
+
+    class Meta:
+        model = AccountSettings
+        fields = ('account', 'email_rsvp_updates', 'email_social_activity', 'email_promotions',
+                  'text_rsvp_updates', 'text_social_activity', 'text_promotions',
+                  'default_event_privacy', 'profile_privacy')
+
+    def update(self, instance, validated_data):
+        normal_fields = set(self.Meta.fields) - set(['profile_privacy', 'account'])
+
+        for field in normal_fields:
+            val = validated_data.get(field, getattr(instance, field))
+            setattr(instance, field, val)
+        instance.save()
+
+        # raise ValueError(validated_data)
+
+        current_privacy = instance.account.profile_privacy
+        new_privacy = validated_data.get('account', {}).get('profile_privacy', current_privacy)
+        if current_privacy != new_privacy:
+            acct = instance.account
+            acct.profile_privacy = new_privacy
+            acct.save()
+
+        return instance
 
 
 class ThumbnailSerializer(serializers.ModelSerializer):

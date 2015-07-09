@@ -9,11 +9,11 @@ from rest_framework.response import Response
 from rest_framework.reverse import reverse
 from rest_framework.compat import OrderedDict
 from rest_framework import filters
-from core.models import Account, Album, AlbumType, AlbumFile, Event, EventGuest, Follow
-from core.serializers import AccountSerializer, AlbumSerializer, AlbumFileSerializer, EventSerializer, \
-    EventGuestSerializer, EventGuestUpdateSerializer, AlbumUpdateSerializer, InAppNotificationSerializer,\
-    FollowingSerializer, FollowerSerializer, FollowerUpdateSerializer, StreamSerializer 
-    # ConnectionSerializer, ConnectionUpdateSerializer
+from core.models import Account, AccountSettings, Album, AlbumType, AlbumFile, Event, EventGuest, Follow
+from core.serializers import (
+    AccountSerializer, AccountSettingsSerializer, AlbumSerializer, AlbumFileSerializer,
+    EventSerializer, EventGuestSerializer, EventGuestUpdateSerializer, AlbumUpdateSerializer,
+    InAppNotificationSerializer, FollowingSerializer, FollowerSerializer, FollowerUpdateSerializer, StreamSerializer)
 from core.permissions import IsAccountOwnerOrReadOnly, IsAlbumUploadableOrReadOnly, IsGrantedAccessToEvent,\
     IsGrantedAccessToAlbum, IsAccountOwnerOrDenied
 from django.db.models import Q
@@ -35,6 +35,7 @@ def api_root(request, format=None):
         'events': reverse('event-list', request=request, format=format),
         'notifications': reverse('notification-list', request=request, format=format),
         'self': reverse('self-detail', request=request, format=format),
+        'settings': reverse('self-settings', request=request, format=format),
     })
 
 
@@ -78,6 +79,17 @@ class AccountSelfDetail(generics.RetrieveUpdateAPIView):
     def get_object(self):
         qs = self.get_queryset()
         return get_object_or_404(qs, id=self.request.user.id)
+
+
+class AccountSettingsDetail(generics.RetrieveUpdateAPIView):
+
+    serializer_class = AccountSettingsSerializer
+    permission_classes = (permissions.IsAuthenticated, )
+    queryset = AccountSettings.objects.filter(account__status=Account.ACTIVE)
+
+    def get_object(self):
+        qs = self.get_queryset()
+        return get_object_or_404(qs, account_id=self.request.user.id)
 
 
 class AlbumFilter(django_filters.FilterSet):
