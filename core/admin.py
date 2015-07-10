@@ -5,7 +5,7 @@ from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm
 from django.utils.translation import ugettext_lazy as _
 from phonenumbers.phonenumberutil import NumberParseException
-from .models import Account, AlbumType, Album, AlbumFile, Thumbnail, Event
+from .models import Account, AlbumType, Album, AlbumFile, Thumbnail, Event, AccountSettings
 
 admin.site.register(Event, gisadmin.GeoModelAdmin)
 
@@ -58,6 +58,11 @@ class AccountAdmin(UserAdmin):
 
     form = AccountChangeForm
     add_form = AccountCreationForm
+
+
+@admin.register(AccountSettings)
+class AccountSettingsAdmin(admin.ModelAdmin):
+    pass
 
 
 @admin.register(AlbumType)

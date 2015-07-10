@@ -69,6 +69,7 @@ def gather_email_data(NotificationType, sender_id, recipient_id, obj_model_class
     ''' Each email notification template requires certain fields '''
     if sender_id:
         sender = Account.objects.get(pk=sender_id)
+
     recipient = Account.objects.get(pk=recipient_id)
     content_type = ContentType.objects.get(app_label=Account._meta.app_label, model=obj_model_class)
     content_object = content_type.get_object_for_this_type(pk=obj_id)

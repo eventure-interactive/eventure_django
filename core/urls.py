@@ -24,6 +24,7 @@ urlpatterns = [
     url(r'^self/$', views.AccountSelfDetail.as_view(), name='self-detail'),
     url(r'^email-validate/(?P<validation_token>[\w|\-]+)/$', views.email_validate, name='email-validate'),
     url(r'^phone-validate/(?P<validation_token>[\w|\-]+)/$', views.phone_validate, name='phone-validate'),
+    url(r'^self/settings/$', views.AccountSettingsDetail.as_view(), name='self-settings'),
 ]
 
 urlpatterns = format_suffix_patterns(urlpatterns)
