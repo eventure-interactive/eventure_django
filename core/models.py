@@ -26,30 +26,32 @@ logger = logging.getLogger(__name__)
 class AccountUserManager(BaseUserManager):
     use_in_migrations = True
 
-    def _create_user(self, phone, password, phone_country=None, email=None, is_staff=False,
+    def _create_user(self, email, password, phone_country=None, phone=None, is_staff=False,
                      is_superuser=False, status=None, **extra):
-        phone = Account.canonical_phone(phone, phone_country)
+        if phone:
+            phone = Account.canonical_phone(phone, phone_country)
         if email:
             email = self.normalize_email(email)
-            # TODO: Save email (we don't have it set up yet)
-        user = self.model(phone=phone, is_staff=is_staff, is_superuser=is_superuser, **extra)
+        else:
+            raise ValueError('The email is required to create this user')
+        user = self.model(email=email, phone=phone, is_staff=is_staff, is_superuser=is_superuser, **extra)
         if status is not None:
             user.status = status
         user.set_password(password)
         user.save(self._db)
         return user
 
-    def create_user(self, phone, password, phone_country=None, email=None, **extra):
-        return self._create_user(phone, password, phone_country, email, False, False, **extra)
+    def create_user(self, email, password, phone_country=None, phone=None, **extra):
+        return self._create_user(email, password, phone_country, phone, False, False, **extra)
 
-    def create_superuser(self, phone, password, phone_country=None, email=None, **extra):
-        return self._create_user(phone, password, phone_country, email, True, True, Account.ACTIVE, **extra)
+    def create_superuser(self, email, password, phone_country=None, phone=None, **extra):
+        return self._create_user(email, password, phone_country, phone, True, True, Account.ACTIVE, **extra)
 
 
 class Account(AbstractBaseUser, PermissionsMixin):
 
     class Meta:
-        ordering = ('name',)
+        ordering = ('email',)
 
     CONTACT = -1  # Not signed up; stub account for future account
     SIGNED_UP = 0
@@ -65,14 +67,14 @@ class Account(AbstractBaseUser, PermissionsMixin):
         (DEACTIVE_FORCEFULLY, 'Forcefully Inactivated'),
     )
 
-    phone = models.CharField(unique=True, max_length=40, validators=[RegexValidator(r'\+?[0-9(). -]')])
-    name = models.CharField(max_length=255)
+    phone = models.CharField(unique=True, max_length=40, null=True, validators=[RegexValidator(r'\+?[0-9(). -]')])
+    name = models.CharField(max_length=255, null=True, blank=True)
     status = models.SmallIntegerField(choices=STATUS_CHOICES, default=SIGNED_UP)
     show_welcome_page = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     modified = models.DateTimeField(auto_now=True)
     date_joined = models.DateTimeField(default=timezone.now)
-    email = models.CharField(unique=True, max_length=100, validators=[EmailValidator()], null=True)
+    email = models.CharField(unique=True, max_length=100, validators=[EmailValidator()])
     last_ntf_checked = models.DateTimeField(null=True)
     profile_albumfile = models.ForeignKey('AlbumFile', blank=True, null=True)
 
@@ -86,10 +88,10 @@ class Account(AbstractBaseUser, PermissionsMixin):
         return self.name
 
     def get_short_name(self):
-        return "{name}... XX{ph}".format(name=self.name[:5], ph=self.phone[-2:])
+        return "{name}... XX{email}".format(name=self.name or '', email=self.email[:5])
 
-    USERNAME_FIELD = 'phone'
-    REQUIRED_FIELDS = ['name']
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = []
 
     @staticmethod
     def canonical_phone(phone_number, country=None):
@@ -458,5 +460,27 @@ class Stream(models.Model):
         if serializer.data is not None:
             self.data = serializer.data
         super(Stream, self).save(*args, **kwargs)
+
+
+class CommChannel(models.Model):
+    ''' Store info about validation of email or phone of account '''
+    EMAIL = 0
+    PHONE = 1
+
+    COMM_CHANNEL_CHOICES = (
+        (EMAIL, 'EMAIL'),
+        (PHONE, 'PHONE'),
+    )
+
+    created = models.DateTimeField(auto_now_add=True)
+    modified = models.DateTimeField(auto_now=True)
+
+    account = models.ForeignKey('Account', )
+    comm_type = models.SmallIntegerField(choices=COMM_CHANNEL_CHOICES)
+    comm_endpoint = models.CharField(max_length=100)  # email or phone to be validated
+    validation_token = models.UUIDField(unique=True, default=uuid.uuid4)
+    validation_date = models.DateTimeField(null=True)  # null if not yet validated
+    message_sent_date = models.DateTimeField(null=True)
+
 
 # EOF

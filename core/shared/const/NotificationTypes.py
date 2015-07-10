@@ -8,6 +8,6 @@ class NotificationTypes(ChoiceEnum):
     EVENT_UPDATE = 3
     EVENTGUEST_RSVP = 2
     ALBUMFILE_UPLOAD = 4
-
+    ACCOUNT_EMAIL_VALIDATE = 5
 
 #EOF

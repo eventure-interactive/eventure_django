@@ -1,0 +1,14 @@
+﻿{% extends "email/base-layout.htm" %}
+
+{% block subject %}Eventure Email Verification{% endblock %}
+
+{% block content %}
+<table width="100%" align="center" style="text-align:center; border-collapse:collapse;" >
+    <tr>
+        <td style="padding-top: 70px;padding-bottom:70px;">
+            <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:16px;">To verify that you own <span style="text-decoration:underline;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:16px;color:#1f8ec2;">{{Email}}</span> please click <a style="display:inline-block;text-decoration:none;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:16px;color:#1f8ec2;" href="{{Site_Url}}email-validate/{{ActivationCode}}/">here</a>.
+            </p>
+        </td>
+    </tr>
+</table>
+{% endblock %}

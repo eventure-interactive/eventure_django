@@ -1,6 +1,6 @@
 # from django.shortcuts import render
 
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, redirect
 from django.http import Http404
 import django_filters
 from rest_framework import status, permissions, generics, pagination
@@ -9,10 +9,10 @@ from rest_framework.response import Response
 from rest_framework.reverse import reverse
 from rest_framework.compat import OrderedDict
 from rest_framework import filters
-from core.models import Account, Album, AlbumType, AlbumFile, Event, EventGuest, Follow
+from core.models import Account, Album, AlbumType, AlbumFile, Event, EventGuest, Follow, CommChannel
 from core.serializers import AccountSerializer, AlbumSerializer, AlbumFileSerializer, EventSerializer, \
     EventGuestSerializer, EventGuestUpdateSerializer, AlbumUpdateSerializer, InAppNotificationSerializer,\
-    FollowingSerializer, FollowerSerializer, FollowerUpdateSerializer, StreamSerializer 
+    FollowingSerializer, FollowerSerializer, FollowerUpdateSerializer, StreamSerializer, AccountSelfSerializer 
     # ConnectionSerializer, ConnectionUpdateSerializer
 from core.permissions import IsAccountOwnerOrReadOnly, IsAlbumUploadableOrReadOnly, IsGrantedAccessToEvent,\
     IsGrantedAccessToAlbum, IsAccountOwnerOrDenied
@@ -23,6 +23,8 @@ from django.contrib.gis.geos import Point
 from geopy.geocoders import GoogleV3
 from django.contrib.gis.measure import D
 from django.utils import timezone
+from django.contrib.auth import login
+import datetime
 import logging
 logger = logging.getLogger(__name__)
 
@@ -54,11 +56,11 @@ class MultipleFieldLookupMixin(object):
         return obj
 
 
-class AccountList(generics.ListAPIView):
+class AccountList(generics.ListCreateAPIView):
     "Provides a list of active Accounts."
     queryset = Account.objects.filter(status=Account.ACTIVE)
     serializer_class = AccountSerializer
-    permission_classes = (permissions.IsAuthenticated, )
+    # permission_classes = (permissions.IsAuthenticated, )
 
 
 class AccountDetail(generics.RetrieveAPIView):
@@ -71,7 +73,7 @@ class AccountDetail(generics.RetrieveAPIView):
 class AccountSelfDetail(generics.RetrieveUpdateAPIView):
     "Show account information for the logged-in user."
 
-    serializer_class = AccountSerializer
+    serializer_class = AccountSelfSerializer
     permission_classes = (permissions.IsAuthenticated, )
     queryset = Account.objects.filter(status=Account.ACTIVE)
 
@@ -414,4 +416,44 @@ class StreamList(generics.ListAPIView):
         self.check_object_permissions(self.request, account)
         return account.streams.all()
 
+
+@api_view(('GET',))
+def email_validate(request, validation_token, format=None):
+    return comm_channel_validate(CommChannel.EMAIL, request, validation_token, format)
+
+
+@api_view(('GET',))
+def phone_validate(request, validation_token, format=None):
+    return comm_channel_validate(CommChannel.PHONE, request, validation_token, format)
+
+
+def comm_channel_validate(comm_type, request, validation_token, format=None):
+    # Check if validation_token is valid, validation_token not yet expired, validation_date has not been set.
+    TOKEN_EXPIRATION_IN_DAYS = 10
+    try:
+        comm_channel = CommChannel.objects.get(comm_type=comm_type, validation_token=validation_token, validation_date__isnull=True, created__gte=timezone.now() - datetime.timedelta(days=TOKEN_EXPIRATION_IN_DAYS))
+    except CommChannel.DoesNotExist:
+        logger.error('Token %s not exist or already expired' % (validation_token))
+        # Redirect to invalid token page
+        return Response({'error': 'Token %s not exist. Redirect URL needed.' % (validation_token)})
+    else:
+        account = comm_channel.account
+        if comm_type == CommChannel.EMAIL:
+            account.status = Account.ACTIVE
+        elif comm_type == CommChannel.PHONE:
+            # any account has the same phone number will have to forfeit to guarantee phone uniqueness
+            for acc in Account.objects.filter(phone=comm_channel.comm_endpoint):
+                acc.phone = None
+                acc.save()
+            account.phone = comm_channel.comm_endpoint
+        account.save()
+
+        comm_channel.validation_date = timezone.now()
+        comm_channel.save()
+
+        # log in user
+        account.backend = 'django.contrib.auth.backends.ModelBackend'  # fake this so we don't need to authenticate before login
+        login(request, account)
+        # Redirect to success validation page
+        return Response({'successful': '%s %s is validated. Move to the next onboarding step. Redirect URL needed.' % (['Email', 'Phone'][comm_type], comm_channel.comm_endpoint)})
 #EOF

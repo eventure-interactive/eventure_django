@@ -15,7 +15,7 @@ from django.contrib.contenttypes.models import ContentType
 class FollowTests(APITestCase):
     # to create this fixtures
     # python manage.py dumpdata core > core/fixtures/core_initial_data.json --natural-foreign --indent=4 -e contenttypes -e auth.Permission
-    fixtures = ['core_initial_data', ]
+    fixtures = ['core_initial_data_2', ]
 
     # def create_fixtures(self):
     #     # create new user account
@@ -31,11 +31,11 @@ class FollowTests(APITestCase):
     def setUp(self):
         # self.create_fixtures()
         # log in
-        self.user = Account.objects.get(phone='+17146032364')
+        self.user = Account.objects.get(email='huy.nguyen@eventure.com')
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
 
-        self.user2 = Account.objects.get(phone='+17148885070')
+        self.user2 = Account.objects.get(email='tidushue@gmail.com')
         self.client2 = APIClient()
         self.client2.force_authenticate(user=self.user2)
 

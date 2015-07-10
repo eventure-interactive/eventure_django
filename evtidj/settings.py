@@ -92,10 +92,10 @@ DATABASES = {
         'NAME': 'evti',
         'USER': 'web-dev',
         'PASSWORD': '1Billion',
-        'HOST': 'localhost',  # 'pgdb-dev.eventure.com',
+        'HOST': 'pgdb-dev.eventure.com',
         'PORT': 5432,
     }
-} 
+}
 
 
 # Internationalization
@@ -120,6 +120,10 @@ EMAIL_HOST_PASSWORD = "1Billion"
 EMAIL_USE_SSL = True
 EMAIL_FROM = "from.all.of.us@eventure.com"
 
+# SMS Config
+SMS_API_KEY = '846f9090'
+SMS_API_SECRET = '4e8e52d3'
+SMS_FROM = 14156537430
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/1.8/howto/static-files/
@@ -177,7 +181,7 @@ LOGGING = {
 AWS_MEDIA_ACCESS_KEY = 'AKIAIUIZFAO5NV43556Q'
 AWS_MEDIA_SECRET_KEY = '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'
 S3_MEDIA_UPLOAD_BUCKET = 'evtimedia'
-S3_MEDIA_KEY_PREFIX = 'dev-hn/'
+S3_MEDIA_KEY_PREFIX = 'dev/'
 S3_MEDIA_REGION = 'us-east-1'
 
 
@@ -193,7 +197,7 @@ CELERY_ENABLE_UTC = True
 CELERY_DISABLE_RATE_LIMITS = True
 BROKER_URL = 'sqs://{}:{}@'.format(AWS_MEDIA_ACCESS_KEY, quote(AWS_MEDIA_SECRET_KEY, safe=''))
 BROKER_TRANSPORT_OPTIONS = {
-    'queue_name_prefix': 'dev-hn-',
+    'queue_name_prefix': 'dev-',
     'visibility_timeout': 60,  # seconds
     'wait_time_seconds': 20,   # Long-polling
 }

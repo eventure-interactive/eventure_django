@@ -5,29 +5,14 @@ from core.models import Account
 
 
 class AlbumFileTests(APITestCase):
-    fixtures = ['core_initial_data.json']
+    fixtures = ['core_initial_data_2.json']
 
     def setUp(self):
         # log in
-        self.user = Account.objects.get(phone='+17146032364')
+        self.user = Account.objects.get(email='huy.nguyen@eventure.com')
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
-
-    def test_albumfile_list(self):
-        # Get album
-        url = reverse('album-list')
-        response = self.client.get(url)
-
-        # Get files
-        files_url = response.data['results'][0]['files']
-        response = self.client.get(files_url)
-        self.assertTrue(response.data['count'] > 0)
-
-        # Get a file detail
-        file_url = response.data['results'][0]['url']
-        response = self.client.get(file_url)
-        self.assertTrue(response.data['url'], file_url)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+    
 
     def test_upload_albumfile_fail(self):
         # Get album
@@ -73,3 +58,13 @@ class AlbumFileTests(APITestCase):
         with open('tests/testimage.jpg', 'rb') as image:
             response = self.client.post(files_url, {'source_file': image})
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        # test_albumfile_list
+        response = self.client.get(files_url)
+        self.assertTrue(response.data['count'] > 0)
+
+        # Get a file detail
+        file_url = response.data['results'][0]['url']
+        response = self.client.get(file_url)
+        self.assertTrue(response.data['url'], file_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)

@@ -29,14 +29,14 @@ class PrivacyTests(APITestCase):
         = Non Event Album: only owner can read/write/create
     + AlbumFile: inherit from its Album,
     """
-    fixtures = ['core_initial_data.json']
+    fixtures = ['core_initial_data_2.json']
     def setUp(self):
         # user log in
-        self.user = Account.objects.get(phone='+17146032364')
+        self.user = Account.objects.get(email='huy.nguyen@eventure.com')
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
 
-        self.user2 = Account.objects.get(phone='+17148885070')
+        self.user2 = Account.objects.get(email='tidushue@gmail.com')
         self.client2 = APIClient()
         self.client2.force_authenticate(user=self.user2)
 

@@ -22,6 +22,8 @@ urlpatterns = [
     url(r'^events/(?P<pk>[0-9]+)/guests/$', views.EventGuestList.as_view(), name='eventguest-list'),
     url(r'^events/(?P<event_id>[0-9]+)/guests/(?P<guest_id>[0-9]+)/$', views.EventGuestDetail.as_view(), name='eventguest-detail'),
     url(r'^self/$', views.AccountSelfDetail.as_view(), name='self-detail'),
+    url(r'^email-validate/(?P<validation_token>[\w|\-]+)/$', views.email_validate, name='email-validate'),
+    url(r'^phone-validate/(?P<validation_token>[\w|\-]+)/$', views.phone_validate, name='phone-validate'),
 ]
 
 urlpatterns = format_suffix_patterns(urlpatterns)

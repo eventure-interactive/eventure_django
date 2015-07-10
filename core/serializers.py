@@ -6,24 +6,71 @@ from django.utils.translation import ugettext as _
 from PIL import Image
 from rest_framework import serializers
 from .models import Account, Album, AlbumType, AlbumFile, Thumbnail, Event, EventGuest, InAppNotification, Follow,\
-    Stream
+    Stream, CommChannel
 from django.utils import timezone
 import requests
 from .tasks import async_send_notifications, async_add_to_stream
 from core.shared.const.NotificationTypes import NotificationTypes
-from core.email_sender import send_email
+from core.email_sender import send_email, async_send_validation_email
+from core.sms_sender import async_send_validation_phone
 import logging
 logger = logging.getLogger(__name__)
+
+
+class FileFieldAllowEmpty(serializers.FileField):
+    "Work-around for fact that normal FileField has trouble with empty values."
+
+    def to_internal_value(self, data):
+        if not data and not self.required:
+            return data
+
+        return super(FileFieldAllowEmpty, self).to_internal_value(data)
 
 
 class AccountSerializer(serializers.HyperlinkedModelSerializer):
     followers = serializers.HyperlinkedIdentityField(read_only=True, view_name='follower-list')
     followings = serializers.HyperlinkedIdentityField(read_only=True, view_name='following-list')
     streams = serializers.HyperlinkedIdentityField(read_only=True, view_name='stream-list')
+    profile_albumfile = serializers.HyperlinkedRelatedField(read_only=True, view_name='albumfile-detail')
+    password = serializers.CharField(write_only=True)
 
     class Meta:
         model = Account
-        fields = ('url', 'name', 'email', 'profile_albumfile', 'followers', 'followings', 'streams')
+        fields = ('url', 'email', 'profile_albumfile', 'followers', 'followings', 'streams', 'password')
+
+    def create(self, validated_data):
+        account = Account.objects.create_user(validated_data['email'], validated_data['password'])
+        account.save()
+        self.send_validation_email(account.id, account.email)
+        return account
+
+    def send_validation_email(self, account_id, email):
+        comm_channel = CommChannel.objects.create(account_id=account_id, comm_type=CommChannel.EMAIL, comm_endpoint=email)
+
+        async_send_validation_email(comm_channel.id)
+
+
+class AccountSelfSerializer(serializers.HyperlinkedModelSerializer):
+    # profile_photo_url = serializers.URLField(write_only=True, required=False, allow_blank=True)
+    # profile_photo_file = FileFieldAllowEmpty(write_only=True, allow_empty_file=True, required=False)
+
+    class Meta:
+        model = Account
+        fields = ('url', 'name', 'email', 'phone')
+        read_only_fields = ('email', )
+
+    def update(self, instance, validated_data):
+        # Delay updating phone until phone validated
+        if validated_data['name'] and instance.name != validated_data['name']:
+            instance.name = validated_data['name']
+            instance.save()
+
+        if validated_data['phone'] and instance.phone != validated_data['phone']:
+            comm_channel = CommChannel.objects.create(account=instance, comm_type=CommChannel.PHONE, comm_endpoint=validated_data['phone'])
+
+            async_send_validation_phone(comm_channel.id)
+
+        return instance
 
 
 class ThumbnailSerializer(serializers.ModelSerializer):
@@ -38,16 +85,6 @@ class AlbumTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = AlbumType
         fields = ('id', 'name', 'description')
-
-
-class FileFieldAllowEmpty(serializers.FileField):
-    "Work-around for fact that normal FileField has trouble with empty values."
-
-    def to_internal_value(self, data):
-        if not data and not self.required:
-            return data
-
-        return super(FileFieldAllowEmpty, self).to_internal_value(data)
 
 
 class TempImageFileData(object):
