@@ -1,0 +1,106 @@
+[
+{
+  "model": "core.albumtype",
+  "fields": {
+    "sort_order": 50,
+    "is_deletable": true,
+    "modified": "2015-04-03T11:02:37.204Z",
+    "created": "2015-04-03T01:57:34.833Z",
+    "name": "CUSTOM",
+    "description": "Custom",
+    "is_virtual": false
+  },
+  "pk": 0
+},
+{
+  "model": "core.albumtype",
+  "fields": {
+    "sort_order": 90,
+    "is_deletable": false,
+    "modified": "2015-04-03T11:03:17.176Z",
+    "created": "2015-04-03T10:59:58.709Z",
+    "name": "SHARED",
+    "description": "Shared by You album",
+    "is_virtual": true
+  },
+  "pk": 3
+},
+{
+  "model": "core.albumtype",
+  "fields": {
+    "sort_order": 30,
+    "is_deletable": false,
+    "modified": "2015-04-03T11:02:12.303Z",
+    "created": "2015-04-03T02:08:03.473Z",
+    "name": "DEFAULT_PROFILE",
+    "description": "Default profile album",
+    "is_virtual": false
+  },
+  "pk": 4
+},
+{
+  "model": "core.albumtype",
+  "fields": {
+    "sort_order": 60,
+    "is_deletable": false,
+    "modified": "2015-04-03T11:02:53.210Z",
+    "created": "2015-04-03T02:13:06.462Z",
+    "name": "DEFAULT_EVENT",
+    "description": "Default event album",
+    "is_virtual": false
+  },
+  "pk": 5
+},
+{
+  "model": "core.albumtype",
+  "fields": {
+    "sort_order": 20,
+    "is_deletable": false,
+    "modified": "2015-04-03T11:01:57.947Z",
+    "created": "2015-04-03T02:06:48.346Z",
+    "name": "BACKGROUND",
+    "description": "Your backgrounds album",
+    "is_virtual": false
+  },
+  "pk": 8
+},
+{
+  "model": "core.albumtype",
+  "fields": {
+    "sort_order": 40,
+    "is_deletable": false,
+    "modified": "2015-04-03T11:02:24.377Z",
+    "created": "2015-04-03T02:09:21.164Z",
+    "name": "LIFEEVENT",
+    "description": "Life Event album",
+    "is_virtual": false
+  },
+  "pk": 9
+},
+{
+  "model": "core.albumtype",
+  "fields": {
+    "sort_order": 0,
+    "is_deletable": false,
+    "modified": "2015-04-03T02:02:51.619Z",
+    "created": "2015-04-03T02:02:51.619Z",
+    "name": "ALLMEDIA",
+    "description": "All media album",
+    "is_virtual": true
+  },
+  "pk": 11
+},
+{
+  "model": "core.albumtype",
+  "fields": {
+    "sort_order": 10,
+    "is_deletable": false,
+    "modified": "2015-04-03T11:01:44.001Z",
+    "created": "2015-04-03T02:05:09.553Z",
+    "name": "LIKED",
+    "description": "Liked by You album",
+    "is_virtual": true
+  },
+  "pk": 12
+}
+]

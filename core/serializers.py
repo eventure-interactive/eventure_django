@@ -514,4 +514,31 @@ class StreamSerializer(serializers.ModelSerializer):
     class Meta:
         model = Stream
         fields = ('stream_type', 'data', 'content_type', 'object_id')
-# EOF
+
+
+class EmailOrPhoneField(serializers.CharField):
+
+    def to_internal_value(self, data):
+        data = data.strip()
+
+        if '@' in data:
+            data = Account.objects.normalize_email(data)
+        else:
+            try:
+                data = Account.normalize_phone(data)
+            except ValueError:
+                data = ''
+
+        return data
+
+
+class LoginFormSerializer(serializers.Serializer):
+
+    login_id = EmailOrPhoneField()
+    password = serializers.CharField(style={'input_type': 'password'})
+
+
+class LoginResponseSerializer(serializers.Serializer):
+
+    account = serializers.URLField()
+    logged_in = serializers.BooleanField()

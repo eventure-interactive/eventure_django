@@ -4,7 +4,7 @@ from django.test import TestCase
 from rest_framework import status
 from rest_framework.test import APIRequestFactory, APIClient, APITestCase
 
-from core.models import Account, AccountSettings, EventPrivacy
+from core.models import Account, AccountSettings, AccountStatus, EventPrivacy
 
 
 class AccountSettingsModelTests(TestCase):
@@ -27,7 +27,7 @@ class AccountSettingsAPITests(APITestCase):
     def setUp(self):
         # log in
         self.user = Account.objects.create_user(phone="+18005551212", password="secret", email="test@example.com",
-                                                name="Testy McTesterson", status=Account.ACTIVE)
+                                                name="Testy McTesterson", status=AccountStatus.ACTIVE)
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
 

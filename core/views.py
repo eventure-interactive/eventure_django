@@ -5,15 +5,19 @@ from django.http import Http404
 import django_filters
 from rest_framework import status, permissions, generics, pagination
 from rest_framework.decorators import api_view
+from rest_framework.parsers import JSONParser, FormParser
 from rest_framework.response import Response
 from rest_framework.reverse import reverse
+from rest_framework.renderers import JSONRenderer
 from rest_framework.compat import OrderedDict
+from rest_framework.views import APIView
 from rest_framework import filters
-from core.models import Account, AccountSettings, Album, AlbumType, AlbumFile, Event, EventGuest, Follow
+from core.models import Account, AccountSettings, AccountStatus, Album, AlbumType, AlbumFile, Event, EventGuest, Follow
 from core.serializers import (
     AccountSerializer, AccountSettingsSerializer, AlbumSerializer, AlbumFileSerializer,
     EventSerializer, EventGuestSerializer, EventGuestUpdateSerializer, AlbumUpdateSerializer,
-    InAppNotificationSerializer, FollowingSerializer, FollowerSerializer, FollowerUpdateSerializer, StreamSerializer)
+    InAppNotificationSerializer, FollowingSerializer, FollowerSerializer, FollowerUpdateSerializer, StreamSerializer,
+    LoginFormSerializer, LoginResponseSerializer)
 from core.permissions import IsAccountOwnerOrReadOnly, IsAlbumUploadableOrReadOnly, IsGrantedAccessToEvent,\
     IsGrantedAccessToAlbum, IsAccountOwnerOrDenied
 from django.db.models import Q
@@ -22,6 +26,7 @@ from django.utils.translation import ugettext as _
 from django.contrib.gis.geos import Point
 from geopy.geocoders import GoogleV3
 from django.contrib.gis.measure import D
+from django.contrib.auth import authenticate, login, logout
 from django.utils import timezone
 import logging
 logger = logging.getLogger(__name__)
@@ -57,7 +62,7 @@ class MultipleFieldLookupMixin(object):
 
 class AccountList(generics.ListAPIView):
     "Provides a list of active Accounts."
-    queryset = Account.objects.filter(status=Account.ACTIVE)
+    queryset = Account.actives.filter()
     serializer_class = AccountSerializer
     permission_classes = (permissions.IsAuthenticated, )
 
@@ -74,7 +79,7 @@ class AccountSelfDetail(generics.RetrieveUpdateAPIView):
 
     serializer_class = AccountSerializer
     permission_classes = (permissions.IsAuthenticated, )
-    queryset = Account.objects.filter(status=Account.ACTIVE)
+    queryset = Account.actives.filter()
 
     def get_object(self):
         qs = self.get_queryset()
@@ -85,7 +90,7 @@ class AccountSettingsDetail(generics.RetrieveUpdateAPIView):
 
     serializer_class = AccountSettingsSerializer
     permission_classes = (permissions.IsAuthenticated, )
-    queryset = AccountSettings.objects.filter(account__status=Account.ACTIVE)
+    queryset = AccountSettings.objects.filter(account__status=AccountStatus.ACTIVE)
 
     def get_object(self):
         qs = self.get_queryset()
@@ -426,4 +431,39 @@ class StreamList(generics.ListAPIView):
         self.check_object_permissions(self.request, account)
         return account.streams.all()
 
-#EOF
+
+class Login(APIView):
+    "Authenticate user."
+
+    parser_classes = (JSONParser, FormParser)
+    render_classes = (JSONRenderer, )
+
+    serializer_class = LoginFormSerializer
+
+    _msg = 'Unable to authenticate with the given login_id and password combination'
+
+    def post(self, request):
+        serializer = LoginFormSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=400)
+
+        login_id = serializer.data['login_id']
+        password = serializer.data['password']
+        try:
+            user = Account.actives.get(Q(phone=login_id) | Q(email=login_id))
+        except Account.DoesNotExist:
+            logger.info('User with login_id "{}" not found'.format(login_id))
+            return Response({'authentication_error': self._msg}, status=422)
+
+        logger.info('Found user: {}'.format(user))
+
+        auth_user = authenticate(phone=user.phone, password=password)
+
+        if auth_user is None:
+            logger.info('Unable to authenticate user: {}'.format(user))
+            return Response({'authentication_error': self._msg}, status=422)
+
+        login(request, auth_user)
+        account_url = reverse('account-detail', kwargs={'pk': auth_user.id}, request=request)
+        serializer = LoginResponseSerializer({'account': account_url, 'logged_in': True})
+        return Response(serializer.data)

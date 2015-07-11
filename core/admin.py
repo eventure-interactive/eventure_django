@@ -14,12 +14,11 @@ class AccountAdminMixin(object):
     def clean_phone(self):
         phone = self.cleaned_data['phone']
         try:
-            phone = Account.canonical_phone(phone)
+            phone = Account.normalize_phone(phone)
         except (ValueError, NumberParseException):
             raise ValidationError(_("%(phone)s is does not appear to be a valid phone number"),
                                   code='invalid', params={'phone': phone})
         return phone
-
 
 class AccountCreationForm(UserCreationForm, AccountAdminMixin):
     "Form for Account creation."
@@ -36,13 +35,13 @@ class AccountChangeForm(UserChangeForm, AccountAdminMixin):
 class AccountAdmin(UserAdmin):
     model = Account
 
-    list_display = ('phone', 'name', 'is_staff')
+    list_display = ('name', 'email', 'phone', 'is_staff')
     list_filter = ('is_staff', 'is_superuser', 'status', 'groups')
     search_fields = ('name', 'phone')
     ordering = ('name',)
 
     fieldsets = (
-        (None, {'fields': ('phone', 'password')}),
+        (None, {'fields': ('email', 'phone', 'password')}),
         (_('Personal info'), {'fields': ('name',)}),
         (_('Permissions'), {'fields': ('status', 'is_staff', 'is_superuser',
                                        'groups', 'user_permissions')}),

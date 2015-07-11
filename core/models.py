@@ -3,6 +3,7 @@ from six.moves.urllib.parse import unquote
 import uuid
 import boto
 import phonenumbers
+from phonenumbers.phonenumberutil import NumberParseException
 import mimetypes
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
@@ -28,11 +29,11 @@ class AccountUserManager(BaseUserManager):
 
     def _create_user(self, phone, password, phone_country=None, email=None, is_staff=False,
                      is_superuser=False, status=None, **extra):
-        phone = Account.canonical_phone(phone, phone_country)
+        phone = self.model.normalize_phone(phone, phone_country)
         if email:
             email = self.normalize_email(email)
             # TODO: Save email (we don't have it set up yet)
-        user = self.model(phone=phone, is_staff=is_staff, is_superuser=is_superuser, **extra)
+        user = self.model(phone=phone, email=email, is_staff=is_staff, is_superuser=is_superuser, **extra)
         if status is not None:
             user.status = status
         user.set_password(password)
@@ -43,13 +44,10 @@ class AccountUserManager(BaseUserManager):
         return self._create_user(phone, password, phone_country, email, False, False, **extra)
 
     def create_superuser(self, phone, password, phone_country=None, email=None, **extra):
-        return self._create_user(phone, password, phone_country, email, True, True, Account.ACTIVE, **extra)
+        return self._create_user(phone, password, phone_country, email, True, True, AccountStatus.ACTIVE, **extra)
 
 
-class Account(AbstractBaseUser, PermissionsMixin):
-
-    class Meta:
-        ordering = ('name',)
+class AccountStatus:
 
     CONTACT = -1  # Not signed up; stub account for future account
     SIGNED_UP = 0
@@ -57,12 +55,24 @@ class Account(AbstractBaseUser, PermissionsMixin):
     ACTIVE = 3
     DEACTIVE_FORCEFULLY = 5
 
+
+class ActiveAccountUserManager(models.Manager):
+
+    def get_queryset(self):
+        return super().get_queryset().filter(status=AccountStatus.ACTIVE)
+
+
+class Account(AbstractBaseUser, PermissionsMixin):
+
+    class Meta:
+        ordering = ('name',)
+
     STATUS_CHOICES = (
-        (CONTACT, 'Contact'),
-        (SIGNED_UP, 'Signed Up'),
-        (DELETED, 'Deleted'),
-        (ACTIVE, 'Active'),
-        (DEACTIVE_FORCEFULLY, 'Forcefully Inactivated'),
+        (AccountStatus.CONTACT, 'Contact'),
+        (AccountStatus.SIGNED_UP, 'Signed Up'),
+        (AccountStatus.DELETED, 'Deleted'),
+        (AccountStatus.ACTIVE, 'Active'),
+        (AccountStatus.DEACTIVE_FORCEFULLY, 'Forcefully Inactivated'),
     )
 
     PUBLIC = 0
@@ -75,7 +85,7 @@ class Account(AbstractBaseUser, PermissionsMixin):
 
     phone = models.CharField(unique=True, max_length=40, validators=[RegexValidator(r'\+?[0-9(). -]')])
     name = models.CharField(max_length=255)
-    status = models.SmallIntegerField(choices=STATUS_CHOICES, default=SIGNED_UP)
+    status = models.SmallIntegerField(choices=STATUS_CHOICES, default=AccountStatus.SIGNED_UP)
     show_welcome_page = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     modified = models.DateTimeField(auto_now=True)
@@ -86,10 +96,11 @@ class Account(AbstractBaseUser, PermissionsMixin):
     profile_albumfile = models.ForeignKey('AlbumFile', blank=True, null=True)
 
     objects = AccountUserManager()
+    actives = ActiveAccountUserManager()
 
     @property
     def is_active(self):
-        return self.status == self.ACTIVE
+        return self.status == AccountStatus.ACTIVE
 
     def get_full_name(self):
         return self.name
@@ -101,20 +112,29 @@ class Account(AbstractBaseUser, PermissionsMixin):
     REQUIRED_FIELDS = ['name']
 
     @staticmethod
-    def canonical_phone(phone_number, country=None):
+    def normalize_phone(phone_number, country=None):
         """Return the canonical phone number for a given phone number and country.
 
         Assumes a US phone number if no country is given.
         """
+        errmsg = _('Does not seem to be a valid phone number')
         if len(phone_number) < 1:
             return ValueError(_("Phone number too short."))
         if not country and phone_number[0] != '+':
             # Assume US phone number
             country = 'US'
 
-        pn = phonenumbers.parse(phone_number, country)
+        try:
+            pn = phonenumbers.parse(phone_number, country)
+        except NumberParseException:
+            if phone_number[0] != '+':
+                try:
+                    pn = phonenumbers.parse('+' + phone_number, None)
+                except NumberParseException:
+                    raise ValueError(errmsg)
+
         if not phonenumbers.is_valid_number(pn):
-            raise ValueError(_('Does not seem to be a valid phone number'))
+            raise ValueError(errmsg)
 
         return phonenumbers.format_number(pn, phonenumbers.PhoneNumberFormat.E164)
 
