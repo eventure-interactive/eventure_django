@@ -47,7 +47,7 @@ class AccountUserManager(BaseUserManager):
         return self._create_user(email, password, phone_country, phone, False, False, **extra)
 
     def create_superuser(self, email, password, phone_country=None, phone=None, **extra):
-        return self._create_user(email, password, phone_country, phone, True, True, Account.ACTIVE, **extra)
+        return self._create_user(email, password, phone_country, phone, True, True, AccountStatus.ACTIVE, **extra)
 
 
 class AccountStatus:
