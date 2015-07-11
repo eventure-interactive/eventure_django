@@ -24,7 +24,8 @@ class LoginTests(APITestCase):
 
             for t in tests:
                 response = self.client.post(self.login_url, t)
-                self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+                self.assertEqual(response.status_code, status.HTTP_200_OK,
+                                 "test: {} response: {}".format(t, response.data))
                 self.assertTrue(response.data.get('logged_in'))
 
         def test_login_phone(self):

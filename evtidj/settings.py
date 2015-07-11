@@ -95,7 +95,7 @@ DATABASES = {
         'HOST': 'pgdb-dev.eventure.com',
         'PORT': 5432,
     }
-} 
+}
 
 
 # Internationalization
@@ -120,6 +120,10 @@ EMAIL_HOST_PASSWORD = "1Billion"
 EMAIL_USE_SSL = True
 EMAIL_FROM = "from.all.of.us@eventure.com"
 
+# SMS Config
+SMS_API_KEY = '846f9090'
+SMS_API_SECRET = '4e8e52d3'
+SMS_FROM = 14156537430
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/1.8/howto/static-files/

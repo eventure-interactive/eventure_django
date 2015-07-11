@@ -24,7 +24,7 @@ class AccountCreationForm(UserCreationForm, AccountAdminMixin):
     "Form for Account creation."
     class Meta:
         model = Account
-        fields = ('name',)
+        fields = ('email',)
 
 
 class AccountChangeForm(UserChangeForm, AccountAdminMixin):
@@ -35,10 +35,10 @@ class AccountChangeForm(UserChangeForm, AccountAdminMixin):
 class AccountAdmin(UserAdmin):
     model = Account
 
-    list_display = ('name', 'email', 'phone', 'is_staff')
+    list_display = ('email', 'phone', 'name', 'is_staff')
     list_filter = ('is_staff', 'is_superuser', 'status', 'groups')
-    search_fields = ('name', 'phone')
-    ordering = ('name',)
+    search_fields = ('name', 'email', 'phone')
+    ordering = ('email',)
 
     fieldsets = (
         (None, {'fields': ('email', 'phone', 'password')}),
@@ -51,7 +51,7 @@ class AccountAdmin(UserAdmin):
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
-            'fields': ('phone', 'name', 'password1', 'password2'),
+            'fields': ('email', 'password1', 'password2'),
         }),
     )
 

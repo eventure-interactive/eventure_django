@@ -5,11 +5,11 @@ from core.models import Account
 
 
 class AlbumTests(APITestCase):
-    fixtures = ['core_initial_data.json']
+    fixtures = ['core_initial_data_2.json']
 
     def setUp(self):
         # log in
-        self.user = Account.objects.get(phone='+17146032364')
+        self.user = Account.objects.get(email='huy.nguyen@eventure.com')
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
 

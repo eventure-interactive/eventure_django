@@ -1,5 +1,3 @@
-import logging
-
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives, EmailMessage
 from django.core import mail
@@ -7,8 +5,10 @@ from django.template import Context
 from django.template.loader import get_template
 from core.shared.const.NotificationTypes import NotificationTypes
 from django.contrib.contenttypes.models import ContentType
-from core.models import Account
+from core.models import Account, CommChannel
 from celery import shared_task
+from django.utils import timezone
+import logging
 logger = logging.getLogger(__name__)
 
 
@@ -17,6 +17,7 @@ notification_map = {
     NotificationTypes.EVENT_INVITE.value: 'email/plan-invitation',
     # NotificationTypes.EVENTGUEST_RSVP.value: '',  TODO
     # NotificationTypes.ALBUMFILE_UPLOAD.value: '',  TODO
+    NotificationTypes.ACCOUNT_EMAIL_VALIDATE.value: 'email/activate-email',
 }
 
 
@@ -66,13 +67,15 @@ def send_email(NotificationType, sender_id, recipient_id, obj_model_class, obj_i
 
 def gather_email_data(NotificationType, sender_id, recipient_id, obj_model_class, obj_id):
     ''' Each email notification template requires certain fields '''
-    sender = Account.objects.get(pk=sender_id)
+    if sender_id:
+        sender = Account.objects.get(pk=sender_id)
+
     recipient = Account.objects.get(pk=recipient_id)
     content_type = ContentType.objects.get(app_label=Account._meta.app_label, model=obj_model_class)
     content_object = content_type.get_object_for_this_type(pk=obj_id)
 
     data = {
-        'Site_Url': '''http://eventure.com/api/''',  # TODO: add this to settings
+        'Site_Url': '''http://eventure.com/''',  # TODO: get this from settings
         'to_email': recipient.email,
     }
 
@@ -86,7 +89,27 @@ def gather_email_data(NotificationType, sender_id, recipient_id, obj_model_class
             'Notes': None,
             'PlanID': obj_id,
         })
-    # elif NotificationTypes == NotificationTypes.EVENTGUEST_RSVP.value:  TODO
-    # elif NotificationTypes == NotificationTypes.ALBUMFILE_UPLOAD.value:  TODO
-        
+    # elif NotificationType == NotificationTypes.EVENTGUEST_RSVP.value:  TODO
+    # elif NotificationType == NotificationTypes.ALBUMFILE_UPLOAD.value:  TODO
+
     return data
+
+
+@shared_task
+def async_send_validation_email(commchannel_id):
+    ''' Send validation token to email '''
+    try:
+        comm_channel = CommChannel.objects.get(pk=commchannel_id)
+    except CommChannel.DoesNotExist:
+        raise ValueError('No object with ID %s is found in core_commchannel' % (commchannel_id))
+    else:
+        to_email = comm_channel.comm_endpoint
+        token = comm_channel.validation_token
+        data = {'Site_Url': '''http://eventure.com/api/''',
+                'ActivationCode': token,
+                'Email': to_email,
+                }
+        _send(NotificationTypes.ACCOUNT_EMAIL_VALIDATE.value, to_email, data)
+
+        comm_channel.message_sent_date = timezone.now()
+        comm_channel.save()

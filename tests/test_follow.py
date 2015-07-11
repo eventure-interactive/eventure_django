@@ -8,20 +8,21 @@ from core.models import Account
 
 
 class FollowTests(APITestCase):
+    fixtures = ['core_initial_data_2.json']
     def setUp(self):
         # create new user account
-        self.user = Account.objects.create(phone='+17146032364', name='Henry', password='testing')
-        self.user.save()
+        # self.user = Account.objects.create(phone='+17146032364', name='Henry', password='testing')
+        # self.user.save()
 
-        self.user2 = Account.objects.create(phone='+17148885070', name='Tidus', password='testing')
-        self.user2.save()
+        # self.user2 = Account.objects.create(phone='+17148885070', name='Tidus', password='testing')
+        # self.user2.save()
 
         # log in
-        self.user = Account.objects.get(phone='+17146032364')
+        self.user = Account.objects.get(email='huy.nguyen@eventure.com')
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
 
-        self.user2 = Account.objects.get(phone='+17148885070')
+        self.user2 = Account.objects.get(email='tidushue@gmail.com')
         self.client2 = APIClient()
         self.client2.force_authenticate(user=self.user2)
 
