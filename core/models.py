@@ -100,9 +100,9 @@ class Account(AbstractBaseUser, PermissionsMixin):
     profile_privacy = models.PositiveSmallIntegerField(choices=PRIVACY_CHOICES, default=PUBLIC)
     profile_albumfile = models.ForeignKey('AlbumFile', blank=True, null=True)
     solr_id = EmptyStringToNoneField(unique=True, max_length=45, null=True, blank=True)
-    created = models.DateTimeField(auto_now_add=True)
+    created = models.DateTimeField(default=timezone.now)
     modified = models.DateTimeField(auto_now=True)
-    date_joined = models.DateTimeField(default=timezone.now, null=True)
+    date_joined = models.DateTimeField(null=True)
 
     objects = AccountUserManager()
     actives = ActiveAccountUserManager()
