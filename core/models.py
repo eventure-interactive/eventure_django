@@ -20,6 +20,8 @@ from geopy.geocoders import GoogleV3
 from core.shared.const.NotificationTypes import NotificationTypes
 from jsonfield import JSONField
 from rest_framework import serializers
+from core.modelfields import EmptyStringToNoneField
+from core.validators import validate_phone_number
 import logging
 logger = logging.getLogger(__name__)
 
@@ -33,8 +35,9 @@ class AccountUserManager(BaseUserManager):
             phone = self.model.normalize_phone(phone, phone_country)
         if email:
             email = self.normalize_email(email)
-        else:
-            raise ValueError('The email is required to create this user')
+
+        if not (email or password):
+            raise ValueError('An email or password is required to create this user')
         user = self.model(email=email, phone=phone, is_staff=is_staff, is_superuser=is_superuser, **extra)
 
         if status is not None:
@@ -85,17 +88,21 @@ class Account(AbstractBaseUser, PermissionsMixin):
         (PRIVATE, 'Private'),
     )
 
-    phone = models.CharField(unique=True, max_length=40, null=True, validators=[RegexValidator(r'\+?[0-9(). -]')])
-    name = models.CharField(max_length=255, null=True, blank=True)
+    email = EmptyStringToNoneField(unique=True, max_length=100, null=True, validators=[EmailValidator()])
+    phone = EmptyStringToNoneField(unique=True, max_length=40, null=True, blank=True,
+                                   validators=[validate_phone_number])
+    name = models.CharField(max_length=255, blank=True)
     status = models.SmallIntegerField(choices=STATUS_CHOICES, default=AccountStatus.SIGNED_UP)
+
     show_welcome_page = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
-    modified = models.DateTimeField(auto_now=True)
-    date_joined = models.DateTimeField(default=timezone.now)
-    email = models.CharField(unique=True, max_length=100, validators=[EmailValidator()])
     last_ntf_checked = models.DateTimeField(null=True)
     profile_privacy = models.PositiveSmallIntegerField(choices=PRIVACY_CHOICES, default=PUBLIC)
     profile_albumfile = models.ForeignKey('AlbumFile', blank=True, null=True)
+    solr_id = EmptyStringToNoneField(unique=True, max_length=45, null=True, blank=True)
+    created = models.DateTimeField(default=timezone.now)
+    modified = models.DateTimeField(auto_now=True)
+    date_joined = models.DateTimeField(null=True)
 
     objects = AccountUserManager()
     actives = ActiveAccountUserManager()
@@ -108,13 +115,14 @@ class Account(AbstractBaseUser, PermissionsMixin):
         return self.name
 
     def get_short_name(self):
+
         return "{name}... XX{email}".format(name=self.name or '', email=self.email[:5])
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []
 
-    @staticmethod
-    def normalize_phone(phone_number, country=None):
+    @classmethod
+    def normalize_phone(cls, phone_number, country=None):
         """Return the canonical phone number for a given phone number and country.
 
         Assumes a US phone number if no country is given.
@@ -129,16 +137,28 @@ class Account(AbstractBaseUser, PermissionsMixin):
         try:
             pn = phonenumbers.parse(phone_number, country)
         except NumberParseException:
-            if phone_number[0] != '+':
-                try:
-                    pn = phonenumbers.parse('+' + phone_number, None)
-                except NumberParseException:
-                    raise ValueError(errmsg)
+            pn = cls._try_plus_phonenumber(phone_number, errmsg)
 
         if not phonenumbers.is_valid_number(pn):
-            raise ValueError(errmsg)
+            # Sometimes a foreign number can look like a valid US number, but it's not
+            # e.g. 48794987216 - Parses ok, but not is_valid_number. Adding + fixes.
+            pn = cls._try_plus_phonenumber(phone_number, errmsg)
+
+            if not phonenumbers.is_valid_number(pn):
+                raise ValueError(errmsg)
 
         return phonenumbers.format_number(pn, phonenumbers.PhoneNumberFormat.E164)
+
+    @staticmethod
+    def _try_plus_phonenumber(phone_number, errmsg):
+        "Try adding + to a phone number to make it valid."
+        if phone_number[0] != '+':
+            try:
+                return phonenumbers.parse("+{}".format(phone_number), None)
+            except NumberParseException:
+                raise ValueError(errmsg)
+        else:
+            raise ValueError(errmsg)
 
     def __str__(self):
         return self.get_short_name()

@@ -16,4 +16,3 @@ def validate_phone_number(value):
 
     if not phonenumbers.is_possible_number(p):
         raise ValidationError('{} does not appear to be a valid phone number'.format(value))
-
