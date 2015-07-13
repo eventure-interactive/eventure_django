@@ -70,3 +70,9 @@ class LoginTests(APITestCase):
                 self.assertEqual(response.status_code, 400, response.data)
                 for k in errkey:
                     self.assertIn(k, response.data)
+
+        def test_logout(self):
+
+            self.client.force_authenticate(user=self.user)
+            response = self.client.delete(self.login_url)
+            self.assertEqual(response.status_code, 204)

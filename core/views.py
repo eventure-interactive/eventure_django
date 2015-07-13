@@ -472,6 +472,11 @@ class Login(APIView):
         serializer = LoginResponseSerializer({'account': account_url, 'logged_in': True})
         return Response(serializer.data)
 
+    def delete(self, request):
+
+        logout(request)
+        return Response(None, status=204)
+
 
 @api_view(('GET',))
 def email_validate(request, validation_token, format=None):
