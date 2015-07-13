@@ -80,7 +80,7 @@ class AccountTests(APITestCase):
         # update phone
         url = reverse('self-detail')
         phone = '+17144595938'
-        response = self.client.put(url, {'name': 'Trigger Happy', 'phone': phone})
+        response = self.client.put(url, {'name': 'Trigger Happy', 'new_phone': phone})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['name'], 'Trigger Happy')
 

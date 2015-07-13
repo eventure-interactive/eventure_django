@@ -14,7 +14,7 @@ from rest_framework.views import APIView
 from rest_framework import filters
 from core.models import (
     Account, AccountSettings, AccountStatus, Album, AlbumType, AlbumFile, Event, EventGuest,
-    Follow, CommChannel)
+    Follow, CommChannel, InAppNotification)
 from core.serializers import (
     AccountSerializer, AccountSettingsSerializer, AlbumSerializer, AlbumFileSerializer, EventSerializer,
     EventGuestSerializer, EventGuestUpdateSerializer, AlbumUpdateSerializer, InAppNotificationSerializer,
@@ -503,9 +503,26 @@ def comm_channel_validate(comm_type, request, validation_token, format=None):
             account.status = AccountStatus.ACTIVE
         elif comm_type == CommChannel.PHONE:
             # any account has the same phone number will have to forfeit to guarantee phone uniqueness
-            for acc in Account.objects.filter(phone=comm_channel.comm_endpoint):
+            for acc in Account.objects.filter(phone=comm_channel.comm_endpoint).exclude(status=AccountStatus.CONTACT):
                 acc.phone = None
                 acc.save()
+            # CONSOLIDATE DATA: find all account with same phone and status=CONTACT (account shell created during event invitation), 
+            # replace shell account with the current account in core_inappnofitication, core_eventguest
+            try:
+                shell_account = Account.objects.get(phone=comm_channel.comm_endpoint, status=AccountStatus.CONTACT)
+            except Account.DoesNotExist:
+                pass
+            else:
+                for eventguest in EventGuest.objects.filter(guest=shell_account):
+                    eventguest.guest = account
+                    eventguest.save()
+
+                for ntf in InAppNotification.objects.filter(recipient=shell_account):
+                    ntf.recipient = account
+                    ntf.save()
+
+                shell_account.delete()  # this can potentially cause relational errors
+            
             account.phone = comm_channel.comm_endpoint
         account.save()
 
