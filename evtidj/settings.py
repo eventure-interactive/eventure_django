@@ -121,9 +121,13 @@ EMAIL_USE_SSL = True
 EMAIL_FROM = "from.all.of.us@eventure.com"
 
 # SMS Config
-SMS_API_KEY = '846f9090'
-SMS_API_SECRET = '4e8e52d3'
-SMS_FROM = 14156537430
+SMS_API_KEY = 'ACf57523cb591698a250610618fa447227'
+SMS_API_SECRET = '8a0027cfb4ba9e5810b6a575f4479410'
+SMS_FROM = '+19495580070'  # This is a number managed in the twillo.com account (SMS service provider)
+
+# Establish if we are in test mode; changed in evtidj.testrunner module
+TEST_RUNNER = 'evtidj.testrunner.MyTestSuiteRunner'
+IN_TEST_MODE = False
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/1.8/howto/static-files/
