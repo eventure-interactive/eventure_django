@@ -35,5 +35,6 @@ deactivate
 
 # reload uwsgi
 service uwsgi restart
+service celeryd restart
 
 echo Done.
