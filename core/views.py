@@ -14,15 +14,17 @@ from rest_framework.views import APIView
 from rest_framework import filters
 from core.models import (
     Account, AccountSettings, AccountStatus, Album, AlbumType, AlbumFile, Event, EventGuest,
-    Follow, CommChannel)
+    Follow, CommChannel, PasswordReset)
 from core.serializers import (
     AccountSerializer, AccountSettingsSerializer, AlbumSerializer, AlbumFileSerializer, EventSerializer,
     EventGuestSerializer, EventGuestUpdateSerializer, AlbumUpdateSerializer, InAppNotificationSerializer,
     FollowingSerializer, FollowerSerializer, FollowerUpdateSerializer, StreamSerializer, AccountSelfSerializer,
-    LoginFormSerializer, LoginResponseSerializer)
+    LoginFormSerializer, LoginResponseSerializer, PasswordResetFormSerializer, VerifyPasswordResetFormSerializer)
 from core.permissions import IsAccountOwnerOrReadOnly, IsAlbumUploadableOrReadOnly, IsGrantedAccessToEvent,\
     IsGrantedAccessToAlbum, IsAccountOwnerOrDenied
+from core import tasks
 from django.db.models import Q
+from django.db import transaction
 from django.contrib.auth.models import AnonymousUser
 from django.utils.translation import ugettext as _
 from django.contrib.gis.geos import Point
@@ -476,6 +478,65 @@ class Login(APIView):
 
         logout(request)
         return Response(None, status=204)
+
+
+class SendPasswordReset(APIView):
+
+    parser_classes = (JSONParser, FormParser)
+    render_classes = (JSONRenderer, )
+
+    serializer_class = PasswordResetFormSerializer
+
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=400)
+
+        # Sending off email async now, as we don't wan't to leak whether or not
+        # this is an active email account. And if we aren't going to tell the user if that's a
+        # valid email, we may as well return ASAP.
+        tasks.send_password_reset_email.delay(serializer.data['email'])
+
+        return Response({'status': 'sending verification email (maybe)'}, status=202)
+
+
+class VerifyPasswordReset(APIView):
+
+    parser_classes = (JSONParser, FormParser)
+    render_classes = (JSONRenderer, )
+
+    serializer_class = VerifyPasswordResetFormSerializer
+
+    @transaction.atomic
+    def post(self, request):
+
+        serializer = self.serializer_class(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=400)
+
+        # Find the candidate reset(s)
+        pwresets = PasswordReset.objects.filter(
+            email=serializer.data['email'],
+            reset_date=None,
+            message_sent_date__gt=(timezone.now() - PasswordReset.TOKEN_EXPIRY_TIMEDELTA))
+
+        recovery_pwr = None
+        for pwr in pwresets:
+            if pwr.get_password_reset_token() == serializer.data['token']:
+                recovery_pwr = pwr
+                break
+
+        if not recovery_pwr:
+            # No token
+            return Response({'error': 'Token not valid or expired'}, status=403)
+
+        recovery_pwr.account.set_password(serializer.data['password'])
+        recovery_pwr.reset_date = timezone.now()
+
+        recovery_pwr.account.save()
+        recovery_pwr.save()
+
+        return Response({'status': 'New password set'}, status=200)
 
 
 @api_view(('GET',))

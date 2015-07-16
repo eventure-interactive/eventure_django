@@ -1,10 +1,11 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from six.moves.urllib.parse import unquote
 import uuid
 import boto
 import phonenumbers
 from phonenumbers.phonenumberutil import NumberParseException
 import mimetypes
+import hashlib
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.core.validators import RegexValidator, MinValueValidator, MaxValueValidator, EmailValidator
@@ -560,4 +561,36 @@ class CommChannel(models.Model):
     message_sent_date = models.DateTimeField(null=True)
 
 
-# EOF
+class PasswordReset(models.Model):
+    "Store information about a password reset request."
+
+    account = models.ForeignKey('Account')
+    email = models.EmailField(db_index=True)
+    token_salt = models.UUIDField(default=uuid.uuid4)
+    message_sent_date = models.DateTimeField(null=True)
+    reset_date = models.DateTimeField(null=True)
+    created = models.DateTimeField(auto_now_add=True)
+    modified = models.DateTimeField(auto_now=True)
+
+    # After this much time, the reset request is no longer valid.
+    TOKEN_EXPIRY_TIMEDELTA = timedelta(days=1)
+
+    def get_password_reset_token(self):
+        """Calculate password reset token from inputs.
+
+        Using a calculated field as we don't want to store plaintext tokens (similar
+        to how we don't want to store cleartext passwords in the database). Probably not
+        as bad a security risk as cleartext passwords (these are time limited tokens), but it's
+        easy to implement...
+
+        See also http://django-password-reset.readthedocs.org/en/latest/quickstart.html#what-you-get
+        , which does something similar.
+        """
+        h = hashlib.new('sha256')
+        h.update(self.message_sent_date.isoformat().encode('utf8'))
+        h.update(str(self.token_salt).encode('utf8'))
+        h.update(self.account.password.encode('utf8'))
+        h.update(settings.SECRET_KEY.encode('utf8'))
+        if self.account.last_login:
+            h.update(self.account.last_login.isoformat().encode('utf8'))
+        return h.hexdigest()

@@ -24,6 +24,8 @@ urlpatterns = [
     url(r'^self/$', views.AccountSelfDetail.as_view(), name='self-detail'),
     url(r'^self/settings/$', views.AccountSettingsDetail.as_view(), name='self-settings'),
     url(r'^authentication/login/', views.Login.as_view(), name='login'),
+    url(r'^authentication/forgotpassword/$', views.SendPasswordReset.as_view(), name='send-password-reset'),
+    url(r'^authentication/forgotpassword/reset/$', views.VerifyPasswordReset.as_view(), name='verify-password-reset'),
     url(r'^email-validate/(?P<validation_token>[\w|\-]+)/$', views.email_validate, name='email-validate'),
     url(r'^phone-validate/(?P<validation_token>[\w|\-]+)/$', views.phone_validate, name='phone-validate'),
 ]

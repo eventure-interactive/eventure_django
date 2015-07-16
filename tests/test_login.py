@@ -2,7 +2,10 @@ from rest_framework.test import APITestCase
 from rest_framework.test import APIRequestFactory, APIClient
 from rest_framework import status
 from django.core.urlresolvers import reverse
-from core.models import Account, AccountStatus
+from django.core import mail
+from django.utils import timezone
+from core.models import Account, AccountStatus, PasswordReset
+from core import tasks
 
 
 class LoginTests(APITestCase):
@@ -67,7 +70,7 @@ class LoginTests(APITestCase):
 
             for t, errkey in tests:
                 response = self.client.post(self.login_url, t)
-                self.assertEqual(response.status_code, 400, response.data)
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, response.data)
                 for k in errkey:
                     self.assertIn(k, response.data)
 
@@ -75,4 +78,46 @@ class LoginTests(APITestCase):
 
             self.client.force_authenticate(user=self.user)
             response = self.client.delete(self.login_url)
-            self.assertEqual(response.status_code, 204)
+            self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+
+class PasswordResetTests(APITestCase):
+
+    def setUp(self):
+        self.user = Account.objects.create_user(email="test@eventure.com", phone='18006032364',
+                                                password='iforgotit', status=AccountStatus.ACTIVE,
+                                                last_login=timezone.now())
+        self.client = APIClient()
+
+    def test_reset_step_one(self):
+        url = reverse('send-password-reset')
+        response = self.client.post(url, {'email': self.user.email})
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+
+    def test_reset_sends_email(self):
+        resp = tasks.send_password_reset_email(self.user.email)
+        self.assertTrue(resp)
+
+        self.assertEqual(len(mail.outbox), 1)
+        token = self._get_token()
+        sent_email = mail.outbox[0]
+        self.assertEqual("Eventure Password Reset Request", sent_email.subject)
+        self.assertIn(token, sent_email.body)
+
+    def test_reset_validate_token(self):
+
+        pr = PasswordReset(email=self.user.email, account=self.user, message_sent_date=timezone.now())
+        pr.save()
+
+        url = reverse("verify-password-reset")
+        password = 'mynewpassword'
+        resp = self.client.post(url, {'email': self.user.email,
+                                      'password': password,
+                                      'token': pr.get_password_reset_token()})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password(password))
+
+    def _get_token(self):
+        pwreset = PasswordReset.objects.get(email=self.user.email)
+        return pwreset.get_password_reset_token()

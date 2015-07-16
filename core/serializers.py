@@ -579,3 +579,15 @@ class LoginResponseSerializer(serializers.Serializer):
 
     account = serializers.URLField()
     logged_in = serializers.BooleanField()
+
+
+class PasswordResetFormSerializer(serializers.Serializer):
+
+    email = serializers.EmailField()
+
+
+class VerifyPasswordResetFormSerializer(serializers.Serializer):
+
+    email = serializers.EmailField()
+    token = serializers.CharField()
+    password = serializers.CharField()

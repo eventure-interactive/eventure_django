@@ -21,6 +21,29 @@ notification_map = {
 }
 
 
+def get_template_subject(rendered_template):
+    """Remove <subject>Subject</subject> from rendered template.
+
+    Returns a tuple containing the rendered_template ex subject and the subject_text.
+
+    E.g. "Hello <subject>Greetings</subject>there."
+    Returns:
+    ("Hello there.", "Greetings")
+    """
+
+    # find the subject in the rendered html
+    subject_start = str.find(rendered_template, "<subject>")
+    subject_end = str.find(rendered_template, "</subject>")
+
+    if subject_start == -1 or subject_end == -1:
+        raise ValueError("Subject not found")
+
+    subject = rendered_template[subject_start + 9: subject_end]
+    out = rendered_template.replace("<subject>" + subject + "</subject>", "")
+
+    return (out, subject)
+
+
 def _send(NotificationType, to_email, data):
     template = notification_map.get(NotificationType)
     if template is None:
@@ -34,15 +57,7 @@ def _send(NotificationType, to_email, data):
     ctx = Context(data)
     html_content = htmly.render(ctx)
 
-    # find the subject in the rendered html
-    subject_start = str.find(html_content, "<subject>")
-    subject_end = str.find(html_content, "</subject>")
-
-    if subject_start == -1 or subject_end == -1:
-        raise ValueError("Subject not found")
-
-    subject = html_content[subject_start + 9: subject_end]
-    html_content = html_content.replace("<subject>" + subject + "</subject>", "")
+    html_content, subject = get_template_subject(html_content)
     text_content = plaintext.render(ctx)
 
     msg = EmailMultiAlternatives(subject, text_content, settings.EMAIL_FROM, [to_email])
