@@ -116,7 +116,7 @@ def finalize_s3_thumbnails(json_data):
 
 
 @shared_task
-def send_password_reset_email(email_address):
+def send_password_reset_email(email_address, url_template):
     "Send password reset email and save sent data in the PasswordReset table."
 
     email = Account.objects.normalize_email(email_address)
@@ -139,8 +139,9 @@ def send_password_reset_email(email_address):
     txttemplate = get_template("email/password_reset.txt")
     pwreset = PasswordReset(account=account, email=email, token_salt=uuid.uuid4(), message_sent_date=timezone.now())
     token = pwreset.get_password_reset_token()
+    pwreset.save()
     context = Context({
-        'reset_url': "https://TODO.eventure.com/NEED_REAL_FRONTEND_URL?email={}&token={}".format(email, token),
+        'reset_url': url_template.format(pw_reset_id=pwreset.id, token=token),
         'contact_email': settings.EMAIL_FROM,
     })
     htmlbody, subject = get_template_subject(template.render(context))
@@ -149,7 +150,6 @@ def send_password_reset_email(email_address):
     sent = send_mail(subject, txtbody, settings.EMAIL_FROM, [email_address], html_message=htmlbody)
 
     if sent == 1:
-        pwreset.save()
         return True
     else:
         return False

@@ -22,7 +22,7 @@ from core.serializers import (
     LoginFormSerializer, LoginResponseSerializer, PasswordResetFormSerializer, VerifyPasswordResetFormSerializer)
 from core.permissions import IsAccountOwnerOrReadOnly, IsAlbumUploadableOrReadOnly, IsGrantedAccessToEvent,\
     IsGrantedAccessToAlbum, IsAccountOwnerOrDenied
-from core import tasks
+from core import common
 from django.db.models import Q
 from django.db import transaction
 from django.contrib.auth.models import AnonymousUser
@@ -509,10 +509,7 @@ class SendPasswordReset(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=400)
 
-        # Sending off email async now, as we don't wan't to leak whether or not
-        # this is an active email account. And if we aren't going to tell the user if that's a
-        # valid email, we may as well return ASAP.
-        tasks.send_password_reset_email.delay(serializer.data['email'])
+        common.send_password_reset(serializer.data, request)
 
         return Response({'status': 'sending verification email (maybe)'}, status=202)
 
@@ -547,11 +544,7 @@ class VerifyPasswordReset(APIView):
             # No token
             return Response({'error': 'Token not valid or expired'}, status=403)
 
-        recovery_pwr.account.set_password(serializer.data['password'])
-        recovery_pwr.reset_date = timezone.now()
-
-        recovery_pwr.account.save()
-        recovery_pwr.save()
+        recovery_pwr.update_password(serializer.data['password'])
 
         return Response({'status': 'New password set'}, status=200)
 

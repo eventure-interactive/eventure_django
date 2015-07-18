@@ -1,12 +1,11 @@
 from django import forms
-from core import views as core_views
-from core import models as core_models
 
 
+PASSWORD_MIN_LENGTH = 5
 _email_field = forms.EmailField(label='Your email',
                                 widget=forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'Email'}))
 _password_field = forms.CharField(label='Your password',
-                                  min_length=5,
+                                  min_length=PASSWORD_MIN_LENGTH,
                                   widget=forms.PasswordInput(attrs={'class': 'form-control',
                                                                     'placeholder': 'Password'}))
 
@@ -16,30 +15,31 @@ class CreateAccountEmailForm(forms.Form):
     email = _email_field
     password = _password_field
 
-    def clean_email(self):
-        Account = core_models.Account
-        AccountStatus = core_models.AccountStatus
-        email = self.cleaned_data['email']
-        if Account.objects.filter(email=email, status__gt=AccountStatus.SIGNED_UP).exists():
-            raise forms.ValidationError('This email address is already in use.')
-        return email
-
 
 class LoginForm(forms.Form):
 
     email = _email_field
     password = _password_field
 
-    def __init__(self, *args, request=None, **kwargs):
-        self.request = request
-        super().__init__(*args, **kwargs)
+
+class ForgotPasswordForm(forms.Form):
+
+    email = _email_field
+
+
+class ResetForgotPasswordForm(forms.Form):
+
+    password1 = forms.CharField(label="Enter your new password", min_length=PASSWORD_MIN_LENGTH,
+                                widget=forms.PasswordInput(attrs={'class': 'form-control',
+                                                                  'placeholder': 'Password'}))
+    password2 = forms.CharField(label="Re-enter your new password", min_length=PASSWORD_MIN_LENGTH,
+                                widget=forms.PasswordInput(attrs={'class': 'form-control',
+                                                                  'placeholder': 'Password'}))
 
     def clean(self):
         cleaned = super().clean()
-        email = cleaned.get('email')
-        password = cleaned.get('password')
+        pw1 = cleaned.get('password1')
+        pw2 = cleaned.get('password2')
 
-        if email and password:
-            user = core_views.Login.do_login(self.request, email, password)
-            if not user:
-                raise forms.ValidationError('An account with that email and password was not found.', code="invalid")
+        if pw1 != pw2:
+            raise forms.ValidationError('Passwords did not match.', code="nomatch")

@@ -1,11 +1,9 @@
 {% extends "base.html" %}
+{% import "auth_macros.html" as am %}
 
 {% block content %}
-<div class="row auth-logo-row">
-	<div class="col-sm-1 hidden-xs">
-		<img src="{{ static('fe/img/logo.png') }}" alt="Eventure logo">
-	</div>
-</div>
+{{ am.logo_row() }}
+
 <div class="row">
 	<div class="col-md-4 col-md-offset-4">
 		<h4>Login to Eventure</h4>
@@ -14,25 +12,16 @@
 <div class="row">
 	<div class="col-md-4 col-md-offset-4">
 		<form method="POST">
-			<div class="form-group has-error">
-				{% for err in form.non_field_errors() %}
-					<p class="help-block">{{ err }}
-				{% endfor %}
-			</div>
-			<div class="form-group {% if form.email.errors %}has-error{% endif %}" >
-				<label class="control-label" for="id_email">{{form.email.label}}</label>
-				{{ form.email }}
-				{% for err in form.email.errors %}
-					<p class="help-block">{{ err }}
-				{% endfor %}
-			</div>
+			{{ am.form_errors(form) }}
+			{{ am.form_field(form.email) }}
+			{# Not using macro for password as "forgot password" is special #}
 			<div class="form-group {% if form.password.errors %}has-error{% endif %}">
 				<label class="control-label" for="id_password">{{form.password.label}}</label>
 				{{ form.password }}
 				{% for err in form.password.errors %}
 					<p class="help-block">{{ err }}
 				{% endfor %}
-				<div class="text-right forgot"><a href="#TODO_FORGOTPW">Forgot password?</a></div>
+				<div class="text-right forgot"><a href="{{ url('fe:forgot-password') }}">Forgot password?</a></div>
 			</div>
 			<div class="form-group">
 				<button class="btn btn-primary auth-submit" type="submit">Login</button>

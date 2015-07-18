@@ -95,7 +95,8 @@ class PasswordResetTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
 
     def test_reset_sends_email(self):
-        resp = tasks.send_password_reset_email(self.user.email)
+        url_template = "http://foo.eventure.com/e/finish-reset/{pw_reset_id}/{token}"
+        resp = tasks.send_password_reset_email(self.user.email, url_template)
         self.assertTrue(resp)
 
         self.assertEqual(len(mail.outbox), 1)

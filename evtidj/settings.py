@@ -151,7 +151,8 @@ STATIC_ROOT = '/var/local/eventure-api/static/'
 
 # Goes in the email footers, and it is a pain to figure out what the fully qualified url is at that
 # point. Punting with a setting.
-REGISTER_URL = 'http://devapi.eventure.com:8000/e/create-account-email'
+REGISTER_URL = 'http://devapi.eventure.com/e/create-account-email'
+EVENTURE_STATIC_SITE_URL = 'http://eventure.com'
 
 REST_FRAMEWORK = {
     'PAGE_SIZE': 25,

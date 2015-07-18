@@ -596,3 +596,21 @@ class PasswordReset(models.Model):
         if self.account.last_login:
             h.update(self.account.last_login.isoformat().encode('utf8'))
         return h.hexdigest()
+
+    def can_still_use(self):
+        """Return True we are still a valid reset object.
+
+        Tests that the token hasn't expired, and that it hasn't been used.
+        """
+        cutoff = timezone.now() - self.TOKEN_EXPIRY_TIMEDELTA
+        return (self.reset_date is None) and (self.message_sent_date > cutoff)
+
+    def update_password(self, new_password):
+        """Update the user password and mark the token as used.
+
+        Performs a 'save' on both this object and the Account.
+        """
+        self.account.set_password(new_password)
+        self.reset_date = timezone.now()
+        self.save()
+        self.account.save()

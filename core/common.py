@@ -4,6 +4,7 @@ from functools import partial
 from django.utils import timezone
 from django.core import urlresolvers
 from core import models
+from core import tasks
 
 from core.email_sender import send_validation_email
 
@@ -38,3 +39,20 @@ def create_account(validated_data, request):
 
     send_validation_email(account.id, account.email, partial(_generate_validation_url, request))
     return account
+
+
+def send_password_reset(validated_data, request):
+
+    # Sending off email async now, as we don't wan't to leak whether or not
+    # this is an active email account. And if we aren't going to tell the user if that's a
+    # valid email, we may as well return ASAP.
+
+    dummy_id = '00800'
+    dummy_token = 'ffffaaafff'
+    fake_path = urlresolvers.reverse('fe:reset-forgot', kwargs={'pw_reset_id': dummy_id, 'token': dummy_token})
+    fake_uri = request.build_absolute_uri(fake_path)
+
+    template_uri = fake_uri.replace(dummy_id, '{pw_reset_id}', 1)
+    template_uri = template_uri.replace(dummy_token, '{token}', 1)
+
+    tasks.send_password_reset_email.delay(validated_data['email'], template_uri)

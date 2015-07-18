@@ -1,0 +1,28 @@
+{% macro logo_row() -%}
+	<div class="row auth-logo-row">
+		<div class="col-sm-1 hidden-xs">
+			<img src="{{ static('fe/img/logo.png') }}" alt="Eventure logo">
+		</div>
+	</div>
+{%- endmacro %}
+
+{% macro form_errors(form) -%}
+	{% set errors = form.non_field_errors() %}
+	{% if errors %}
+		<div class="form-group has-error">
+			{% for err in errors %}
+				<p class="help-block">{{ err }}
+			{% endfor %}
+		</div>
+	{% endif %}
+{%- endmacro %}
+
+{% macro form_field(form_field, label="") -%}
+	<div class="form-group {% if form_field.errors %}has-error{% endif %}" >
+		<label class="control-label" for="{{ form_field.id_for_label }}">{{ label or form_field.label }}</label>
+		{{ form_field }}
+		{% for err in form_field.errors %}
+			<p class="help-block">{{ err }}
+		{% endfor %}
+	</div>
+{%- endmacro %}
