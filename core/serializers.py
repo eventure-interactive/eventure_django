@@ -6,7 +6,7 @@ from django.utils.translation import ugettext as _
 from PIL import Image
 from rest_framework import serializers
 from .models import Account, AccountSettings, Album, AlbumType, AlbumFile, Thumbnail, Event, EventGuest, InAppNotification, Follow,\
-    Stream, CommChannel
+    Stream, CommChannel, EventPrivacy
 from django.utils import timezone
 import requests
 from .tasks import async_send_notifications, async_add_to_stream
@@ -33,7 +33,7 @@ class AccountSerializer(serializers.HyperlinkedModelSerializer):
     followings = serializers.HyperlinkedIdentityField(read_only=True, view_name='following-list')
     streams = serializers.HyperlinkedIdentityField(read_only=True, view_name='stream-list')
     profile_albumfile = serializers.HyperlinkedRelatedField(read_only=True, view_name='albumfile-detail')
-    password = serializers.CharField(write_only=True)
+    password = serializers.CharField(write_only=True, style={'input_type': 'password'})
 
     class Meta:
         model = Account
@@ -335,6 +335,17 @@ class AlbumFileSerializer(serializers.HyperlinkedModelSerializer):
             async_send_notifications(notification_type, sender.id, guest.id, 'albumfile', albumfile.id)
 
 
+# def get_default_event_privacy(account):
+#     default_event_privacy = Event.PUBLIC
+#     try:
+#         account_settings = AccountSettings.objects.get(account=account)
+#     except AccountSettings.DoesNotExist:
+#         pass
+#     else:
+#         default_event_privacy = account_settings.default_event_privacy
+#     return default_event_privacy
+
+
 class EventSerializer(serializers.HyperlinkedModelSerializer):
 
     owner = serializers.HyperlinkedRelatedField(read_only=True, view_name='account-detail')
@@ -343,6 +354,7 @@ class EventSerializer(serializers.HyperlinkedModelSerializer):
     guests = serializers.HyperlinkedIdentityField(view_name='eventguest-list')
     lat = serializers.FloatField(allow_null=True, read_only=True)
     lon = serializers.FloatField(allow_null=True, read_only=True)
+    # privacy = serializers.ChoiceField(choices=EventPrivacy.PRIVACY_CHOICES, required=False, default=get_default_event_privacy(serializers.CurrentUserDefault()))
 
     class Meta:
         model = Event
@@ -645,3 +657,13 @@ class LoginResponseSerializer(serializers.Serializer):
 
     account = serializers.URLField()
     logged_in = serializers.BooleanField()
+
+
+class GoogleAuthorizationSerializer(serializers.Serializer):
+    CONTACT_SCOPE = 'https://www.googleapis.com/auth/contacts.readonly'
+    CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar'
+    SCOPE_CHOICES = ((CONTACT_SCOPE, CONTACT_SCOPE),
+        (CALENDAR_SCOPE, CALENDAR_SCOPE))
+    # google_scope = serializers.ChoiceField(choices=SCOPE_CHOICES, default=CONTACT_SCOPE)
+    scope = serializers.CharField()
+    code = serializers.CharField()

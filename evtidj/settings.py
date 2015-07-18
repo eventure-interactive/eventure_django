@@ -209,4 +209,9 @@ BROKER_TRANSPORT_OPTIONS = {
 TEMP_ALBUMFILE_DIR = os.path.join(BASE_DIR, 'albumfile_tmp')
 HOST_NAME = socket.gethostname()
 
+SITE_URL = 'http://devapi.eventure.com/'
+
+GOOGLE_API_CLIENT_ID = '943142708269.apps.googleusercontent.com'
+GOOGLE_API_CLIENT_SECRET = '2ZIndLAernSicPFHgsi45_0s'
+GOOGLE_API_REDIRECT_URL = SITE_URL + 'oauth2callback'
 # EOF

@@ -14,14 +14,14 @@ from rest_framework.views import APIView
 from rest_framework import filters
 from core.models import (
     Account, AccountSettings, AccountStatus, Album, AlbumType, AlbumFile, Event, EventGuest,
-    Follow, CommChannel, InAppNotification)
+    Follow, CommChannel, InAppNotification, GoogleCredentials)
 from core.serializers import (
     AccountSerializer, AccountSettingsSerializer, AlbumSerializer, AlbumFileSerializer, EventSerializer,
     EventGuestSerializer, EventGuestUpdateSerializer, AlbumUpdateSerializer, InAppNotificationSerializer,
     FollowingSerializer, FollowerSerializer, FollowerUpdateSerializer, StreamSerializer, AccountSelfSerializer,
-    LoginFormSerializer, LoginResponseSerializer)
+    LoginFormSerializer, LoginResponseSerializer, GoogleAuthorizationSerializer)
 from core.permissions import IsAccountOwnerOrReadOnly, IsAlbumUploadableOrReadOnly, IsGrantedAccessToEvent,\
-    IsGrantedAccessToAlbum, IsAccountOwnerOrDenied
+    IsGrantedAccessToAlbum, IsAccountOwnerOrDenied, IsAuthenticatedOrReadOnly
 from django.db.models import Q
 from django.contrib.auth.models import AnonymousUser
 from django.utils.translation import ugettext as _
@@ -31,6 +31,12 @@ from django.contrib.gis.measure import D
 from django.contrib.auth import authenticate, login, logout
 from django.utils import timezone
 from django.contrib.auth import login
+from django.conf import settings
+from oauth2client.client import FlowExchangeError, OAuth2WebServerFlow
+from oauth2client.django_orm import Storage
+import googleapiclient
+import httplib2
+from apiclient.discovery import build
 import datetime
 import logging
 logger = logging.getLogger(__name__)
@@ -45,6 +51,7 @@ def api_root(request, format=None):
         'notifications': reverse('notification-list', request=request, format=format),
         'self': reverse('self-detail', request=request, format=format),
         'settings': reverse('self-settings', request=request, format=format),
+        'self-google-connect': reverse('google-connect', request=request, format=format),
     })
 
 
@@ -88,6 +95,13 @@ class AccountSelfDetail(generics.RetrieveUpdateAPIView):
     def get_object(self):
         qs = self.get_queryset()
         return get_object_or_404(qs, id=self.request.user.id)
+
+    def delete(self, request):
+        ''' Deactivate account '''
+        account = self.get_object()
+        account.status = AccountStatus.DEACTIVE_FORCEFULLY
+        account.save()
+        return Response({'successful': 'Account has been deactivated.'}, status=status.HTTP_204_NO_CONTENT)
 
 
 class AccountSettingsDetail(generics.RetrieveUpdateAPIView):
@@ -215,7 +229,7 @@ class EventList(generics.ListCreateAPIView):
     URL_PARAM_VICINITY = 'vicinity'
     URL_PARAM_MILES = 'miles'
 
-    # permission_classes = (permissions.IsAuthenticated,)
+    permission_classes = (IsAuthenticatedOrReadOnly,)
     serializer_class = EventSerializer
     paginate_by = 20
 
@@ -226,16 +240,17 @@ class EventList(generics.ListCreateAPIView):
     filter_class = EventFilter
 
     def perform_create(self, serializer):
+        self.check_object_permissions(self.request, None)
+
         instance = serializer.save(owner=self.request.user)
 
         # create a default album
-        new_album = Album.objects.create(
+        Album.objects.create(
             owner=self.request.user,
             event=instance,
             name='%s Album' % (instance.title),
             description='Default Album for Event',
             album_type=AlbumType.objects.get(name="DEFAULT_EVENT"))
-        new_album.save()
 
     def get_queryset(self):
         miles = self.request.QUERY_PARAMS.get(self.URL_PARAM_MILES)
@@ -247,7 +262,7 @@ class EventList(generics.ListCreateAPIView):
             geolocator = GoogleV3()
             location = geolocator.geocode(vicinity)
             point = Point(location.longitude, location.latitude)
-            events = Event.objects.filter(mpoint__dwithin=(point, D(mi=miles)))            
+            events = Event.objects.filter(mpoint__dwithin=(point, D(mi=miles)))     
 
         # No private events what user dont own or guest of should be shown
         if isinstance(self.request.user, AnonymousUser):
@@ -534,4 +549,78 @@ def comm_channel_validate(comm_type, request, validation_token, format=None):
         login(request, account)
         # Redirect to success validation page
         return Response({'successful': '%s %s is validated. Move to the next onboarding step. Redirect URL needed.' % (['Email', 'Phone'][comm_type], comm_channel.comm_endpoint)})
+
+
+class GoogleApiAuthorization(APIView):
+    ''' Show if user has connected his google account, and url to authorize if not '''
+
+    serializer_class = GoogleAuthorizationSerializer
+    permission_classes = (permissions.IsAuthenticated, )
+
+    CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar'  # read & write
+    CONTACT_SCOPE = 'https://www.googleapis.com/auth/contacts.readonly'  # read only
+
+    def get_flow(self, scope):
+        scope = scope.replace('+', ' ')
+        return OAuth2WebServerFlow(client_id=settings.GOOGLE_API_CLIENT_ID,
+                                   client_secret=settings.GOOGLE_API_CLIENT_SECRET,
+                                   scope=scope,
+                                   redirect_uri=settings.GOOGLE_API_REDIRECT_URL,
+                                   include_granted_scopes='true')
+
+    def get_authorize_uri(self, scope):
+        auth_uri = self.get_flow(scope).step1_get_authorize_url()
+        return auth_uri
+
+    def is_connected_with_google_account(self, user, scope):
+        ''' Test that the user has connected his google account'''
+
+        storage = Storage(GoogleCredentials, 'account', user, 'credentials')
+        credentials = storage.get()
+
+        if credentials is None:
+            return False
+
+        if scope == self.CALENDAR_SCOPE:
+            try:
+                http = credentials.authorize(httplib2.Http())
+                service = build('calendar', 'v3', http=http)
+                response = service.events().list(calendarId='primary').execute()
+            except googleapiclient.errors.HttpError as e:  # permission error means this scope is not authorized
+                return False
+            else:
+                return True
+        return False
+
+    def get(self, request, format=None):
+        data = {'is_connected_with_google_calendar': self.is_connected_with_google_account(request.user, self.CALENDAR_SCOPE),
+                # 'google_contact_authorize_uri': self.get_authorize_uri(self.CONTACT_SCOPE),
+                'google_calendar_authorize_url': self.get_authorize_uri(self.CALENDAR_SCOPE),
+
+                }
+        return Response(data)
+
+    def post(self, request, format=None):
+        serializer = GoogleAuthorizationSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=400)
+
+        code = serializer.data['code']
+        scope = serializer.data['scope']
+
+        flow = self.get_flow(scope)
+
+        try:
+            credentials = flow.step2_exchange(code)
+        except FlowExchangeError as e:
+            return Response({'error': str(e)})
+
+        storage = Storage(GoogleCredentials, 'account', request.user, 'credentials')
+        storage.put(credentials)
+
+        data = {'is_connected_with_google_calendar': self.is_connected_with_google_account(request.user, self.CALENDAR_SCOPE),
+                }
+
+        return Response(data)
+
 #EOF

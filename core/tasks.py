@@ -1,18 +1,10 @@
 "Module for async celery tasks."
 
-from datetime import datetime
 import json
 import logging
-import os
-import tempfile
-import uuid
-
-import boto.s3
 from celery import shared_task, chord
-from django.conf import settings
-from PIL import Image
-
-from core.models import AlbumFile, Thumbnail, InAppNotification, Stream, Event
+from core.models import AlbumFile, Thumbnail, InAppNotification, Stream, Event, AccountSettings, Account, AccountStatus
+from core.shared.const.NotificationTypes import NotificationTypes
 from core.email_sender import send_email
 from django.contrib.contenttypes.models import ContentType
 
@@ -24,12 +16,13 @@ def async_add_to_stream(stream_type, sender_id, recipient_id, obj_model_class, o
     addstream = add_to_stream.s(stream_type, sender_id, recipient_id, obj_model_class, obj_id)
     return addstream.delay()
 
+
 @shared_task
 def add_to_stream(stream_type, sender_id, recipient_id, obj_model_class, obj_id):
     content_type = ContentType.objects.get(app_label=AlbumFile._meta.app_label, model=obj_model_class)
     content_object = content_type.get_object_for_this_type(pk=obj_id)
 
-    stream = Stream.objects.create(stream_type=stream_type, sender_id=sender_id, recipient_id=recipient_id, content_object=content_object)
+    Stream.objects.create(stream_type=stream_type, sender_id=sender_id, recipient_id=recipient_id, content_object=content_object)
 
 
 ################### NOTIFICATIONS ##################
@@ -38,7 +31,17 @@ def async_send_notifications(notification_type, sender_id, recipient_id, obj_mod
 
     send_inapp_notification.s(notification_type, sender_id, recipient_id, obj_model_class, obj_id).delay()
 
-    send_email.s(notification_type, sender_id, recipient_id, obj_model_class, obj_id).delay()
+    if is_email_ntf_allowed(notification_type, recipient_id):
+        send_email.s(notification_type, sender_id, recipient_id, obj_model_class, obj_id).delay()
+
+
+def is_email_ntf_allowed(notification_type, recipient_id):
+    if not Account.objects.filter(pk=recipient_id, status=AccountStatus.ACTIVE, email__isnull=False).exists():
+        return False
+    if notification_type == NotificationTypes.EVENTGUEST_RSVP.value:
+        return AccountSettings.objects.filter(account_id=recipient_id, email_rsvp_updates=True).exists()
+    else:
+        return AccountSettings.objects.filter(account_id=recipient_id, email_social_activity=True).exists()
 
 
 @shared_task

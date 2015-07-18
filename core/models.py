@@ -22,6 +22,9 @@ from jsonfield import JSONField
 from rest_framework import serializers
 from core.modelfields import EmptyStringToNoneField
 from core.validators import validate_phone_number
+import oauth2client
+import base64
+import pickle
 import logging
 logger = logging.getLogger(__name__)
 
@@ -162,6 +165,45 @@ class Account(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return self.get_short_name()
+
+
+class MyCredentialsField(models.Field):
+    def __init__(self, *args, **kwargs):
+        if 'null' not in kwargs:
+            kwargs['null'] = True
+        super().__init__(*args, **kwargs)
+
+    def get_internal_type(self):
+        return "TextField"
+
+    def to_python(self, value):
+        if value is None:
+            return None
+        if isinstance(value, oauth2client.client.Credentials):
+            return value
+
+        value = value.encode("utf-8")  # string to byte
+
+        return pickle.loads(base64.b64decode(value))
+
+    def from_db_value(self, value, expression, connection, context):
+        return self.to_python(value)
+
+    def get_db_prep_value(self, value, connection, prepared=False):
+        if value is None:
+            return None
+
+        byte_repr = base64.b64encode(pickle.dumps(value))
+
+        return byte_repr.decode("utf-8")  # byte to string
+
+    def get_prep_value(self, value):
+        return self.get_db_prep_value(value)
+
+
+class GoogleCredentials(models.Model):
+    account = models.OneToOneField(Account, primary_key=True, )
+    credentials = MyCredentialsField()
 
 
 class EventPrivacy(object):
