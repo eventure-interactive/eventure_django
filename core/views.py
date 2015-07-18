@@ -448,6 +448,32 @@ class Login(APIView):
 
     _msg = 'Unable to authenticate with the given login_id and password combination'
 
+    @staticmethod
+    def _get_user(login_id):
+        try:
+            user = Account.actives.get(Q(phone=login_id) | Q(email=login_id))
+        except Account.DoesNotExist:
+            logger.info('User with login_id "{}" not found'.format(login_id))
+            return None
+
+        return user
+
+    @staticmethod
+    def do_login(request, login_id, password):
+        "Returns the user's Account if we logged in the user successfully, otherwise None."
+
+        user = Login._get_user(login_id)
+        if not user:
+            return False
+
+        auth_user = authenticate(email=user.email, password=password)
+        if auth_user:
+            login(request, auth_user)
+        else:
+            logger.info('Unable to authenticate user: {}'.format(user))
+
+        return auth_user
+
     def post(self, request):
         serializer = LoginFormSerializer(data=request.data)
         if not serializer.is_valid():
@@ -455,21 +481,12 @@ class Login(APIView):
 
         login_id = serializer.data['login_id']
         password = serializer.data['password']
-        try:
-            user = Account.actives.get(Q(phone=login_id) | Q(email=login_id))
-        except Account.DoesNotExist:
-            logger.info('User with login_id "{}" not found'.format(login_id))
+
+        auth_user = self.do_login(request, login_id, password)
+
+        if not auth_user:
             return Response({'authentication_error': self._msg}, status=422)
 
-        logger.info('Found user: {}'.format(user))
-
-        auth_user = authenticate(email=user.email, password=password)
-
-        if auth_user is None:
-            logger.info('Unable to authenticate user: {}'.format(user))
-            return Response({'authentication_error': self._msg}, status=422)
-
-        login(request, auth_user)
         account_url = reverse('account-detail', kwargs={'pk': auth_user.id}, request=request)
         serializer = LoginResponseSerializer({'account': account_url, 'logged_in': True})
         return Response(serializer.data)
@@ -557,7 +574,7 @@ def comm_channel_validate(comm_type, request, validation_token, format=None):
     except CommChannel.DoesNotExist:
         logger.error('Token %s not exist or already expired' % (validation_token))
         # Redirect to invalid token page
-        return Response({'error': 'Token %s not exist. Redirect URL needed.' % (validation_token)})
+        return redirect('fe:bad-channel-validation')
     else:
         account = comm_channel.account
         if comm_type == CommChannel.EMAIL:
@@ -577,5 +594,5 @@ def comm_channel_validate(comm_type, request, validation_token, format=None):
         account.backend = 'django.contrib.auth.backends.ModelBackend'  # fake this so we don't need to authenticate before login
         login(request, account)
         # Redirect to success validation page
-        return Response({'successful': '%s %s is validated. Move to the next onboarding step. Redirect URL needed.' % (['Email', 'Phone'][comm_type], comm_channel.comm_endpoint)})
-#EOF
+
+        return redirect('fe:set-profile')

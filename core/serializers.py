@@ -11,8 +11,8 @@ from django.utils import timezone
 import requests
 from .tasks import async_send_notifications, async_add_to_stream
 from core.shared.const.NotificationTypes import NotificationTypes
-from core.email_sender import send_email, async_send_validation_email
 from core.sms_sender import async_send_validation_phone
+from core import common
 import logging
 logger = logging.getLogger(__name__)
 
@@ -39,15 +39,7 @@ class AccountSerializer(serializers.HyperlinkedModelSerializer):
         fields = ('url', 'email', 'profile_albumfile', 'followers', 'followings', 'streams', 'password')
 
     def create(self, validated_data):
-        account = Account.objects.create_user(validated_data['email'], validated_data['password'])
-        account.save()
-        self.send_validation_email(account.id, account.email)
-        return account
-
-    def send_validation_email(self, account_id, email):
-        comm_channel = CommChannel.objects.create(account_id=account_id, comm_type=CommChannel.EMAIL, comm_endpoint=email)
-
-        async_send_validation_email(comm_channel.id)
+        return common.create_account(validated_data, self.context['request'])
 
 
 class AccountSelfSerializer(serializers.HyperlinkedModelSerializer):

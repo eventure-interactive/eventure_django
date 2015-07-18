@@ -37,8 +37,10 @@ class AccountUserManager(BaseUserManager):
         if email:
             email = self.normalize_email(email)
 
-        if not (email or password):
-            raise ValueError('An email or password is required to create this user')
+        if not (email or phone):
+            raise ValueError('An email or phone is required to create this user')
+        if not password:
+            raise ValueError('Password cannot be empty')
         user = self.model(email=email, phone=phone, is_staff=is_staff, is_superuser=is_superuser, **extra)
 
         if status is not None:

@@ -92,6 +92,7 @@ def gather_email_data(NotificationType, sender_id, recipient_id, obj_model_class
     data = {
         'Site_Url': '''http://eventure.com/''',  # TODO: get this from settings
         'to_email': recipient.email,
+        "RegisterUrl": settings.REGISTER_URL,
     }
 
     if NotificationType == NotificationTypes.EVENT_INVITE.value:
@@ -111,20 +112,29 @@ def gather_email_data(NotificationType, sender_id, recipient_id, obj_model_class
 
 
 @shared_task
-def async_send_validation_email(commchannel_id):
-    ''' Send validation token to email '''
+def async_send_validation_email(commchannel_id, validation_url):
+
     try:
         comm_channel = CommChannel.objects.get(pk=commchannel_id)
     except CommChannel.DoesNotExist:
         raise ValueError('No object with ID %s is found in core_commchannel' % (commchannel_id))
-    else:
-        to_email = comm_channel.comm_endpoint
-        token = comm_channel.validation_token
-        data = {'Site_Url': '''http://eventure.com/api/''',
-                'ActivationCode': token,
-                'Email': to_email,
-                }
-        _send(NotificationTypes.ACCOUNT_EMAIL_VALIDATE.value, to_email, data)
 
-        comm_channel.message_sent_date = timezone.now()
-        comm_channel.save()
+    to_email = comm_channel.comm_endpoint
+    token = comm_channel.validation_token
+    data = {'Site_Url': '''http://eventure.com/api/''',
+            'ActivationUrl': validation_url,
+            'Email': to_email,
+            'RegisterUrl': settings.REGISTER_URL,
+            }
+    _send(NotificationTypes.ACCOUNT_EMAIL_VALIDATE.value, to_email, data)
+
+    comm_channel.message_sent_date = timezone.now()
+    comm_channel.save()
+
+
+def send_validation_email(account_id, email, validation_url_fn):
+        comm_channel = CommChannel.objects.create(account_id=account_id,
+                                                  comm_type=CommChannel.EMAIL,
+                                                  comm_endpoint=email)
+        validation_url = validation_url_fn(comm_channel.validation_token)
+        async_send_validation_email(comm_channel.id, validation_url)

@@ -70,7 +70,7 @@ class AccountTests(APITestCase):
         # validate email to activate account
         url = reverse('email-validate', kwargs={'validation_token': validation_token})
         response = self.client.get(url)
-        self.assertIn('successful', response.data)
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
 
         # try to log in with that account
         # response = self.client.login(username=email, password=password)
@@ -90,6 +90,6 @@ class AccountTests(APITestCase):
         # Validate phone
         url = reverse('phone-validate', kwargs={'validation_token': validation_token})
         response = self.client.get(url)
-        self.assertIn('successful', response.data)
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
     
 #EOF

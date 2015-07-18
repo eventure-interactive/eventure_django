@@ -47,6 +47,7 @@ INSTALLED_APPS = (
 
     'rest_framework',
     'core',
+    'fe',
 
     'django.contrib.gis',
 )
@@ -78,6 +79,14 @@ TEMPLATES = [
             ],
         },
     },
+    {
+        'BACKEND': 'django.template.backends.jinja2.Jinja2',
+        'DIRS': [],
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'environment': 'fe.jinja2env.environment'
+        }
+    }
 ]
 
 WSGI_APPLICATION = 'evtidj.wsgi.application'
@@ -134,6 +143,10 @@ IN_TEST_MODE = False
 
 STATIC_URL = '/static/'
 STATIC_ROOT = '/var/local/eventure-api/static/'
+
+# Goes in the email footers, and it is a pain to figure out what the fully qualified url is at that
+# point. Punting with a setting.
+REGISTER_URL = 'http://devapi.eventure.com:8000/e/create-account-email'
 
 REST_FRAMEWORK = {
     'PAGE_SIZE': 25,

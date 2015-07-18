@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row auth-logo-row">
+	<div class="col-sm-1 hidden-xs">
+		<img src="{{ static('fe/img/logo.png') }}" alt="Eventure logo">
+	</div>
+</div>
+
+<div class="row">
+	<div class="col-md-4 col-md-offset-4 text-center">
+		<p>We will be sending you an email with a link <br>to verify that this is you.
+		<p>Click the link in the email to finish creating your account.
+	</div>
+</div>
+<div class="row new-acct">
+	<div class="col-md-4 col-md-offset-4 text-center">
+		<a href="{{ url('fe:home') }}" class="btn btn-primary auth-submit">Ok, got it.</a>
+	</div>
+</div>
+{% endblock %}
+
+{% block title %}Verification Email Sent{% endblock %}
+

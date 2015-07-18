@@ -11,7 +11,7 @@
             padding-bottom:15px;
             padding-right:30px;
             font-size:14px;
-            font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;
+            font-family: TimesNewRoman, 'Times New Roman', Times, Baskerville, Georgia, serif;
             font-weight:bold;
             color:#313131;
             vertical-align:top;
@@ -20,7 +20,7 @@
             text-align:left;
             padding-bottom:15px;
             font-size:14px;
-            font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;
+            font-family: TimesNewRoman, 'Times New Roman', Times, Baskerville, Georgia, serif;
             font-weight: 300;
             color:#313131;
             vertical-align:top;
@@ -29,18 +29,21 @@
             color:#1f8ec2;
             text-decoration:none;
         }
+        body {
+            font-family: TimesNewRoman, 'Times New Roman', Times, Baskerville, Georgia, serif;
+        }
     </style>
-    <body style="margin: 0; background: #fff; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 200; padding: 0;">
+    <body style="margin: 0; background: #fff; font-family: TimesNewRoman, 'Times New Roman', Times, Baskerville, Georgia, serif; font-weight: 200; padding: 0;">
         <subject>{%block subject %}{% endblock %}</subject>
         <table width="610" cellpadding="0" cellspacing="0" align="center" style="background:#fff; text-align:center;">
             <tr>
                 <td>
                     <table width="544" align="center" style="text-align: center;">
                         <tr>
-                            <td style="padding-bottom: 20px; padding-top: 24px; border-bottom: 2px solid #252525;">
+                            <td style="padding-bottom: 40px; padding-top: 24px;">
                                 {% block header %}
-                                    <a href="{{ Site_Url }}">
-                                        <img src="{{ Site_Url }}images/email/text-logo.png" style="max-height: 29px;" height="29"/>
+                                    <a href="http://eventure.com">
+                                        <img src="https://s3.amazonaws.com/evti-other/img/Eventure-Logo.png" style="max-width: 240px;" width="240" alt="Eventure"/>
                                     </a>
                                 {% endblock %}
                             </td>
@@ -51,39 +54,24 @@
                                 {% endblock %}
                             </td>
                         </tr>
+
                         <tr>
-                            <td style="border-top: 1px solid #cfcfcf; padding: 28px 0px; border-bottom: 1px solid #cfcfcf;">
-                                {% block footertop %}
-                                    <table width="100%">
-                                        <tr>
-                                        <td style="padding-right:25px;text-align:right;color:#252525;font-size:16px;" width="40%">Get the app</td>
-                                        <td width="60%" style="text-align:left;">
-                                            <a href="https://play.google.com/store/apps/details?id=com.eventure.app&hl=en">
-                                                <img src="{{ Site_Url }}images/email/google-play.png" style="max-height:45px;" height="45" />
-                                            </a>
-                                        </td>
-                                      </tr>
-                                    </table>
-                                {% endblock %}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 16px 0px; border-bottom: 1px solid #cfcfcf;">
+                            <td style="padding: 16px 0px;border-top: 1px solid #cfcfcf;">
                                 {% block footermiddle %}
                                     <table width="100%;">
                                         <tr>
-                                            <td width="60%" style="margin: 0; text-align: center; color: #252525; font-size: 16px;">
+                                            <td width="50%" style="margin: 0; text-align: center; color: #252525; font-size: 16px;font-family: TimesNewRoman, 'Times New Roman', Times, Baskerville, Georgia, serif;">
                                                 Stay connected with Eventure on
                                             </td>
                                             <td style="text-align: left; padding: 0;">
-                                                <a href="https://www.facebook.com/eventureon" style="display: inline-block; margin: 0 5px;">
-                                                    <img src="{{ Site_Url }}images/email/facebook.png" style="max-height: 50px;" height="50" />
+                                                <a href="https://instagram.com/eventure/" style="display: inline-block; margin: 0 5px;">
+                                                    <img src="https://s3.amazonaws.com/evti-other/img/camera.png" style="max-height: 50px;max-width:50px;" height="50" width="50" alt="Instagram"/>
                                                 </a>
-                                                <a href="https://plus.google.com/u/1/+Eventureon" style="display: inline-block; margin: 0 5px;">
-                                                    <img src="{{ Site_Url }}images/email/googleplus.png" style="max-height: 50px;" height="50" />
+                                                <a href="https://www.facebook.com/eventure" style="display: inline-block; margin: 0 5px;">
+                                                    <img src="https://s3.amazonaws.com/evti-other/img/facebook.png" style="max-height: 50px;max-width:50px;" height="50" width="50" alt="Facebook"/>
                                                 </a>
-                                                <a href="https://twitter.com/eventureon" style="display: inline-block; margin: 0 5px;">
-                                                    <img src="{{ Site_Url }}images/email/twitter.png" style="max-height: 50px;" height="50" />
+                                                <a href="https://twitter.com/eventure" style="display: inline-block; margin: 0 5px;">
+                                                    <img src="https://s3.amazonaws.com/evti-other/img/twitter.png" style="max-height: 50px;max-width:50px;" height="50" width="50" alt="Twitter"/>
                                                 </a>
                                             </td>
                                         </tr>
@@ -92,24 +80,24 @@
                             </td>
                         </tr>
                         <tr>
-                            <td style="padding-top: 38px; font-size: 13px; font-style: italic;">
+                            <td style="border-top: 1px solid #cfcfcf;padding-top: 38px; font-size: 14px; font-style: italic;">
                                 {% block footerbottom %}
                                     <table width="100%" align="center" style="text-align: center;">
                                         <tr>
                                             <td>
-                                                <i style="margin: 0px; font-size: 13px; color: #252525;">If you are not a member of Eventure, please
-                                                <a style="text-decoration: none; font-size: 13px;color: #1f8ec2;" href="{{ Site_Url }}?showsignup=true">click here</a> to register.</i>
+                                                <i style="margin: 0px; font-size: 14px; color: #252525;font-family: TimesNewRoman, 'Times New Roman', Times, Baskerville, Georgia, serif;">If you are not a member of Eventure, please
+                                                <a style="text-decoration: none; font-size: 14px;color: #1f8ec2;" href="{{ RegisterUrl }}">click here</a> to register.</i>
                                             </td>
                                         </tr>
                                         <tr>
                                             <td>
-                                                <i style="margin: 0px; font-size: 13px; color: #252525;">If you believe you have received this message in error, please
-                                                <a href="{{ Site_Url }}contact" style="text-decoration: none; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 13px; color: #1f8ec2;">click here</a> to let us know.</i>
+                                                <i style="margin: 0px; font-size: 14px; color: #252525;font-family: TimesNewRoman, 'Times New Roman', Times, Baskerville, Georgia, serif;">If you believe you have received this message in error,<br/>please
+                                                <a href="http://eventure.com/contact" style="text-decoration: none; font-size: 14px; color: #1f8ec2;">click here</a> to let us know.</i>
                                             </td>
                                         </tr>
                                         <tr>
-                                            <td style="padding-top: 20px; padding-bottom: 80px;">
-                                                <i style="margin: 0px; font-size: 13px;color: #252525;">© 2015 Eventure Interactive, Inc.</i>
+                                            <td style="padding-top: 20px; padding-bottom: 80px;font-family: TimesNewRoman, 'Times New Roman', Times, Baskerville, Georgia, serif;">
+                                                <i style="margin: 0px; font-size: 14px;color: #252525;">© 2015 Eventure Interactive, Inc.</i>
                                             </td>
                                         </tr>
                                     </table>

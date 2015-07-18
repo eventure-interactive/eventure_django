@@ -1,0 +1,32 @@
+.btn {
+	-webkit-border-radius:0px;
+	-moz-border-radius:0px;
+	border-radius:0px;
+}
+
+.btn-primary {
+	color:#fff;
+    background-color:#46a6dd;
+}
+
+input.form-control {
+	-webkit-border-radius:0px;
+    -moz-border-radius:0px;
+    border-radius:0px;
+}
+
+label.control-label {
+	font-weight: normal;
+}
+
+.auth-logo-row {
+	margin-top:30px;
+	margin-bottom:30px
+}
+
+.auth-submit {
+	display:block;
+    width: 200px;
+    margin: 20px auto;
+    padding: 10px; 
+}
