@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% import "auth_macros.html" as am %}
+
+{% block content %}
+{{ am.logo_row() }}
+
+<div class="row photo-row">
+	<div class="col-md-4 col-md-offset-4">
+		<a href="#TODO-upload-photo">
+			<img id="profile-photo" src="{{ static('fe/img/profile-photo.png') }}"
+				alt="Click to upload profile photo"
+				class="img-circle center-block">
+		</a>
+	</div>
+</div>
+
+<div class="row">
+	<div class="col-md-4 col-md-offset-4">
+		<form method="POST">
+			{{ am.form_errors(form) }}
+			{{ am.form_field(form.name) }}
+			<div class="form-group">
+				<button class="btn btn-primary auth-submit" type="submit">Ready to go!</button>
+			</div>
+			<input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+		</form>
+	</div>
+</div>
+
+{% endblock %}
+
+{% block title %}Set Initial Profile{% endblock %}
+
+{% block page_css %}
+.photo-row {
+	margin-bottom: 30px;
+}
+
+.auth-submit {
+	margin-top:30px;
+}
+{% endblock %}

@@ -38,7 +38,8 @@ class LoginView(View):
                 return render(request, self.template_name, {'form': form})
             else:
                 # Success, we logged them in
-                return redirect('fe:home')
+                next_ = request.GET.get('next', 'fe:home')  # check for Django ?next=/path/to/redirect
+                return redirect(next_)
 
         return render(request, self.template_name, {'form': form})
 
@@ -124,6 +125,26 @@ class ResetForgotPasswordView(View):
             return render(request, "reset_forgot_password_done.html")
 
         return render(request, self.template_name, {'form': form, 'email': pw_reset.email})
+
+
+class SetProfileView(View):
+    "Set initial profile (name and profile image)."
+
+    template_name = "set_profile.html"
+    form_class = forms.SetProfileForm
+
+    def get(self, request):
+        form = self.form_class(initial={'name': request.user.name})
+        return render(request, self.template_name, {'form': form})
+
+    def post(self, request):
+        form = self.form_class(request.POST)
+        if form.is_valid():
+            request.user.name = form.cleaned_data['name']
+            request.user.save()
+            return redirect('fe:welcome-tour')
+
+        return render(request, self.template_name, {'form': form})
 
 
 def todo_view(request):

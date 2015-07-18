@@ -43,3 +43,9 @@ class ResetForgotPasswordForm(forms.Form):
 
         if pw1 != pw2:
             raise forms.ValidationError('Passwords did not match.', code="nomatch")
+
+
+class SetProfileForm(forms.Form):
+
+    name = forms.CharField(label="Your name",
+                           widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Name'}))
