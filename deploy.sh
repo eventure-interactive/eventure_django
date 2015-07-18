@@ -29,6 +29,9 @@ chown --recursive www-data:www-data $APP_DIR
 source $VENV_DIR/bin/activate
 $VENV_DIR/bin/pip3 install --upgrade -r ./requirements.txt
 
+# Do migrations
+python manage.py migrate
+
 # Copy static files
 python manage.py collectstatic --noinput
 deactivate
