@@ -552,7 +552,8 @@ def comm_channel_validate(comm_type, request, validation_token, format=None):
 
 
 class GoogleApiAuthorization(APIView):
-    ''' Show if user has connected his google account, and url to authorize if not '''
+    ''' Show if user has connected his google account, and url to authorize if not. 
+    Also, provide the scope & code parameters get from the returned URL so back-end can save the credentials'''
 
     serializer_class = GoogleAuthorizationSerializer
     permission_classes = (permissions.IsAuthenticated, )

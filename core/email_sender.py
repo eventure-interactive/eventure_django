@@ -75,7 +75,7 @@ def gather_email_data(NotificationType, sender_id, recipient_id, obj_model_class
     content_object = content_type.get_object_for_this_type(pk=obj_id)
 
     data = {
-        'Site_Url': '''http://eventure.com/''',  # TODO: get this from settings
+        'Site_Url': settings.SITE_URL,
         'to_email': recipient.email,
     }
 
@@ -105,7 +105,7 @@ def async_send_validation_email(commchannel_id):
     else:
         to_email = comm_channel.comm_endpoint
         token = comm_channel.validation_token
-        data = {'Site_Url': '''http://eventure.com/api/''',
+        data = {'Site_Url': settings.SITE_URL + 'api/',
                 'ActivationCode': token,
                 'Email': to_email,
                 }

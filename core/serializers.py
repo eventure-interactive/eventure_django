@@ -105,7 +105,7 @@ class AccountSelfSerializer(serializers.HyperlinkedModelSerializer):
             af = AlbumFile(
                 owner=self.context['request'].user,
                 name=img_data.original_name.rsplit('.', 1)[0],
-                description="%s's avatar" % (self.context['request'].user.name),
+                description="Profile photo",
                 width=img_data.width,
                 height=img_data.height,
                 size_bytes=img_data.size_bytes,
