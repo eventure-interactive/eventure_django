@@ -6,13 +6,14 @@ from django.utils.translation import ugettext as _
 from PIL import Image
 from rest_framework import serializers
 from .models import Account, AccountSettings, Album, AlbumType, AlbumFile, Thumbnail, Event, EventGuest, InAppNotification, Follow,\
-    Stream, CommChannel
+    Stream, CommChannel, EventPrivacy
 from django.utils import timezone
 import requests
 from .tasks import async_send_notifications, async_add_to_stream
 from core.shared.const.NotificationTypes import NotificationTypes
 from core.sms_sender import async_send_validation_phone
 from core import common
+from django.core.validators import RegexValidator
 import logging
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ class AccountSerializer(serializers.HyperlinkedModelSerializer):
     followings = serializers.HyperlinkedIdentityField(read_only=True, view_name='following-list')
     streams = serializers.HyperlinkedIdentityField(read_only=True, view_name='stream-list')
     profile_albumfile = serializers.HyperlinkedRelatedField(read_only=True, view_name='albumfile-detail')
-    password = serializers.CharField(write_only=True)
+    password = serializers.CharField(write_only=True, style={'input_type': 'password'})
 
     class Meta:
         model = Account
@@ -43,24 +44,89 @@ class AccountSerializer(serializers.HyperlinkedModelSerializer):
 
 
 class AccountSelfSerializer(serializers.HyperlinkedModelSerializer):
-    # profile_photo_url = serializers.URLField(write_only=True, required=False, allow_blank=True)
-    # profile_photo_file = FileFieldAllowEmpty(write_only=True, allow_empty_file=True, required=False)
+    profile_photo_file = FileFieldAllowEmpty(allow_empty_file=True, required=False)
+    profile_albumfile = serializers.HyperlinkedRelatedField(read_only=True, view_name='albumfile-detail')
+    new_phone = serializers.CharField(allow_null=True, max_length=40, required=False, validators=[RegexValidator(r'\+?[0-9(). -]')])
 
     class Meta:
         model = Account
-        fields = ('url', 'name', 'email', 'phone')
-        read_only_fields = ('email', )
+        fields = ('url', 'name', 'email', 'phone', 'profile_photo_file', 'profile_albumfile', 'new_phone')
+        read_only_fields = ('email', 'phone')
+
+    def validate_profile_photo_file(self, data):
+
+        if not data:
+            return data
+
+        if data.content_type.startswith('video/'):
+            raise serializers.ValidationError(_("Uploading videos not yet supported."))
+
+        if not (data.content_type.startswith('image/') or data.content_type.startswith('video/')):
+            msg = _("Source file needs to be an image.")  # TODO: Or a video
+            raise serializers.ValidationError(msg)
+
+        img_data = self._validate_img_file(data)
+        img_data.original_name = data.name
+
+        self.context['img_data'] = img_data
+
+        return data
+
+    def _validate_img_file(self, imgfile):
+        "Bare validation to make sure what was uploaded is a parseable image."
+
+        imgfile.seek(0)
+
+        try:
+            img = Image.open(imgfile)
+            w, h = img.size
+            format_ = img.format
+        except IOError:
+            raise serializers.ValidationError('Does not appear to be a valid image.')
+
+        imgfile.seek(0)
+
+        return TempImageFileData(width=w, height=h, format=format_, file=imgfile)
+
+    def save_profile_photo(self):
+        img_data = self.context.get('img_data')
+        profile_album, created = Album.objects.get_or_create(owner=self.context['request'].user, album_type_id=4, defaults={'name': 'Profile Photo Album', 'description': 'Default Profile Photo Album'})
+
+        if img_data:
+            # create image data
+            af = AlbumFile(
+                owner=self.context['request'].user,
+                name=img_data.original_name.rsplit('.', 1)[0],
+                description="Profile photo",
+                width=img_data.width,
+                height=img_data.height,
+                size_bytes=img_data.size_bytes,
+                file_type=AlbumFile.PHOTO_TYPE,
+                status=AlbumFile.PROCESSING,
+                )
+
+            af.upload_s3_photo(img_data.file, img_data.format)
+            af.save()
+            profile_album.albumfiles.add(af)
+
+            return af
 
     def update(self, instance, validated_data):
-        # Delay updating phone until phone validated
-        if validated_data['name'] and instance.name != validated_data['name']:
+        # Don't save new phone until phone validated (in phone-validate view)
+        if validated_data.get('name') and instance.name != validated_data['name']:
             instance.name = validated_data['name']
             instance.save()
 
-        if validated_data['phone'] and instance.phone != validated_data['phone']:
-            comm_channel = CommChannel.objects.create(account=instance, comm_type=CommChannel.PHONE, comm_endpoint=validated_data['phone'])
+        if validated_data.get('new_phone') and instance.phone != validated_data['new_phone']:
+            comm_channel = CommChannel.objects.create(account=instance, comm_type=CommChannel.PHONE, comm_endpoint=validated_data['new_phone'])
 
             async_send_validation_phone(comm_channel.id)
+
+        if validated_data.get('profile_photo_file'):
+            profile_af = self.save_profile_photo()
+            if profile_af is not None:
+                instance.profile_albumfile = profile_af
+                instance.save()
 
         return instance
 
@@ -261,6 +327,17 @@ class AlbumFileSerializer(serializers.HyperlinkedModelSerializer):
             async_send_notifications(notification_type, sender.id, guest.id, 'albumfile', albumfile.id)
 
 
+# def get_default_event_privacy(account):
+#     default_event_privacy = Event.PUBLIC
+#     try:
+#         account_settings = AccountSettings.objects.get(account=account)
+#     except AccountSettings.DoesNotExist:
+#         pass
+#     else:
+#         default_event_privacy = account_settings.default_event_privacy
+#     return default_event_privacy
+
+
 class EventSerializer(serializers.HyperlinkedModelSerializer):
 
     owner = serializers.HyperlinkedRelatedField(read_only=True, view_name='account-detail')
@@ -269,6 +346,7 @@ class EventSerializer(serializers.HyperlinkedModelSerializer):
     guests = serializers.HyperlinkedIdentityField(view_name='eventguest-list')
     lat = serializers.FloatField(allow_null=True, read_only=True)
     lon = serializers.FloatField(allow_null=True, read_only=True)
+    # privacy = serializers.ChoiceField(choices=EventPrivacy.PRIVACY_CHOICES, required=False, default=get_default_event_privacy(serializers.CurrentUserDefault()))
 
     class Meta:
         model = Event
@@ -573,6 +651,12 @@ class LoginResponseSerializer(serializers.Serializer):
     logged_in = serializers.BooleanField()
 
 
+class GoogleAuthorizationSerializer(serializers.Serializer):
+
+    scope = serializers.CharField()
+    code = serializers.CharField()
+
+
 class PasswordResetFormSerializer(serializers.Serializer):
 
     email = serializers.EmailField()
@@ -583,3 +667,4 @@ class VerifyPasswordResetFormSerializer(serializers.Serializer):
     email = serializers.EmailField()
     token = serializers.CharField()
     password = serializers.CharField()
+

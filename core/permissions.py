@@ -14,6 +14,14 @@ class IsAccountOwnerOrReadOnly(permissions.BasePermission):
         return obj == request.user
 
 
+class IsAuthenticatedOrReadOnly(permissions.BasePermission):
+    "If log in, allow read/write. If not, allow read only"
+
+    def has_object_permission(self, request, view, obj):
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        return request.user.is_authenticated()
+
 # DEPRICATED/UNUSED
 # class IsAlbumOwnerAndDeleteCustom(permissions.BasePermission):
 

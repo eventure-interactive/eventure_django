@@ -40,7 +40,7 @@ class AccountTests(APITestCase):
         account_detail_url = reverse('account-detail', kwargs={'pk': self.user.id})
         self.assertEqual('http://testserver' + account_detail_url, response.data['url'])
 
-    def test_create_account(self):
+    def test_create_deactivate_account(self):
         # log out of tidushue account
         self.client.logout()
         # create account
@@ -80,16 +80,22 @@ class AccountTests(APITestCase):
         # update phone
         url = reverse('self-detail')
         phone = '+17144595938'
-        response = self.client.put(url, {'name': 'Trigger Happy', 'phone': phone})
+        response = self.client.put(url, {'name': 'Trigger Happy', 'new_phone': phone})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['name'], 'Trigger Happy')
 
         # Get validation_token
         comm_channel = CommChannel.objects.filter(comm_endpoint=phone).latest('created')
         validation_token = comm_channel.validation_token
+
         # Validate phone
-        url = reverse('phone-validate', kwargs={'validation_token': validation_token})
-        response = self.client.get(url)
+        phone_validate_url = reverse('phone-validate', kwargs={'validation_token': validation_token})
+        response = self.client.get(phone_validate_url)
         self.assertEqual(response.status_code, status.HTTP_302_FOUND)
-    
+
+        # Deactivate account
+        response = self.client.delete(url)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(response.data['successful'], 'Account has been deactivated.')
+
 #EOF
