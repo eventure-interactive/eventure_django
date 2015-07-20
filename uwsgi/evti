@@ -19,9 +19,6 @@
 
 upstream django {
 	server unix:///tmp/evti0.sock;
-	server unix:///tmp/evti1.sock;
-	server unix:///tmp/evti2.sock;
-	server unix:///tmp/evti2.sock;
 }
 
 server {
@@ -29,15 +26,31 @@ server {
 	listen [::]:80 default_server ipv6only=on;
 
 	client_max_body_size 15m;
-	server_name devapi-rest.eventure.com;
+	server_name devapi.eventure.com;
 	
+	root /memberfiles;
+
 	location /static/ {
-		root /home/ubuntu/;
+		root /var/local/eventure-api/;
+	}
+
+	location /api {
+		include uwsgi_params;
+		uwsgi_pass django;
+	}
+
+	location /admin {
+		include uwsgi_params;
+		uwsgi_pass django;
+	}
+
+	location /api-auth {
+		include uwsgi_params;
+		uwsgi_pass django;
 	}
 
 	location / {
-		include uwsgi_params;
-		uwsgi_pass django;
+		try_files $uri $uri/ =404;
 	}
 
 	# Only for nginx-naxsi used with nginx-naxsi-ui : process denied requests

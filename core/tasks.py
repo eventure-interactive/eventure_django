@@ -1,12 +1,21 @@
 "Module for async celery tasks."
 
+from datetime import datetime, timedelta
 import json
 import logging
 from celery import shared_task, chord
-from core.models import AlbumFile, Thumbnail, InAppNotification, Stream, Event, AccountSettings, Account, AccountStatus
+from django.conf import settings
+from PIL import Image
+
+from core.models import (
+    AlbumFile, Thumbnail, InAppNotification, Stream, Event, Account, AccountSettings, AccountStatus, PasswordReset)
 from core.shared.const.NotificationTypes import NotificationTypes
-from core.email_sender import send_email
+from core.email_sender import send_email, get_template_subject
+from django.core.mail import send_mail
 from django.contrib.contenttypes.models import ContentType
+from django.template import Context
+from django.template.loader import get_template
+from django.utils import timezone
 
 logger = logging.getLogger('core.tasks')
 
@@ -112,3 +121,42 @@ def finalize_s3_thumbnails(json_data):
         albumfile.status = AlbumFile.ACTIVE
         albumfile.save()
 
+
+@shared_task
+def send_password_reset_email(email_address):
+    "Send password reset email and save sent data in the PasswordReset table."
+
+    email = Account.objects.normalize_email(email_address)
+    try:
+        account = Account.objects.get(email=email, status__in=(AccountStatus.ACTIVE, AccountStatus.DELETED))
+    except Account.DoesNotExist:
+        logger.info("send_password_reset_email: No account exists for email {}".format(email))
+        return False
+
+    # See if we've sent an email in the last 5 minutes. If we have, let's do nothing.
+    cutoff_dt = timezone.now() - timedelta(minutes=5)
+    reset_count = PasswordReset.objects.filter(account=account,
+                                               message_sent_date__gt=cutoff_dt,
+                                               reset_date=None).count()
+    if reset_count:
+        logger.info("send_password_reset_email: Reset email has recently been sent for this account.")
+        return False
+
+    template = get_template('email/password_reset.htm')
+    txttemplate = get_template("email/password_reset.txt")
+    pwreset = PasswordReset(account=account, email=email, token_salt=uuid.uuid4(), message_sent_date=timezone.now())
+    token = pwreset.get_password_reset_token()
+    context = Context({
+        'reset_url': "https://TODO.eventure.com/NEED_REAL_FRONTEND_URL?email={}&token={}".format(email, token),
+        'contact_email': settings.EMAIL_FROM,
+    })
+    htmlbody, subject = get_template_subject(template.render(context))
+    txtbody = txttemplate.render(context)
+
+    sent = send_mail(subject, txtbody, settings.EMAIL_FROM, [email_address], html_message=htmlbody)
+
+    if sent == 1:
+        pwreset.save()
+        return True
+    else:
+        return False

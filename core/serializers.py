@@ -660,10 +660,19 @@ class LoginResponseSerializer(serializers.Serializer):
 
 
 class GoogleAuthorizationSerializer(serializers.Serializer):
-    CONTACT_SCOPE = 'https://www.googleapis.com/auth/contacts.readonly'
-    CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar'
-    SCOPE_CHOICES = ((CONTACT_SCOPE, CONTACT_SCOPE),
-        (CALENDAR_SCOPE, CALENDAR_SCOPE))
-    # google_scope = serializers.ChoiceField(choices=SCOPE_CHOICES, default=CONTACT_SCOPE)
+
     scope = serializers.CharField()
     code = serializers.CharField()
+
+
+class PasswordResetFormSerializer(serializers.Serializer):
+
+    email = serializers.EmailField()
+
+
+class VerifyPasswordResetFormSerializer(serializers.Serializer):
+
+    email = serializers.EmailField()
+    token = serializers.CharField()
+    password = serializers.CharField()
+
