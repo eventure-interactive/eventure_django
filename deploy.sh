@@ -15,7 +15,9 @@ VENV_DIR="$DEPLOY_DIR/api-venv"
 rm -rf $APP_DIR/core
 rm -rf $APP_DIR/evtidj
 rm -rf $DEPLOY_DIR/static/*
+rm -rf $APP_DIR/fe
 
+cp -a fe $APP_DIR
 cp -a core $APP_DIR
 cp -a evtidj $APP_DIR
 

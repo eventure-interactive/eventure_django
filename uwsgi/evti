@@ -38,6 +38,10 @@ server {
 		include uwsgi_params;
 		uwsgi_pass django;
 	}
+	location /e {
+		include uwsgi_params;
+		uwsgi_pass django;
+	}
 
 	location /admin {
 		include uwsgi_params;
