@@ -6,7 +6,7 @@ import logging
 from celery import shared_task, chord
 from django.conf import settings
 from PIL import Image
-
+import uuid
 from core.models import (
     AlbumFile, Thumbnail, InAppNotification, Stream, Event, Account, AccountSettings, AccountStatus, PasswordReset)
 from core.shared.const.NotificationTypes import NotificationTypes
