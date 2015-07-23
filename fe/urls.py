@@ -12,6 +12,7 @@ urlpatterns = [
         name='reset-forgot'),
     # After we validate email, we are redirected here...
     url(r'^set-profile$', login_required(views.SetProfileView.as_view()), name='set-profile'),
+    url(r'^account-settings$', login_required(views.AccountSettingsView.as_view()), name='account-settings'),
 
     # TODO
     url(r'^$', views.todo_view, name='home'),

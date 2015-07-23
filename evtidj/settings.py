@@ -187,6 +187,13 @@ LOGGING = {
             'filename': 'logs/log.log',
             'formatter': 'verbose'
         },
+        'fe_log_file':{
+            'level': 'DEBUG',
+            'class': 'logging.handlers.TimedRotatingFileHandler',
+            'when': 'midnight',
+            'filename': 'logs/fe_log.log',
+            'formatter': 'verbose'
+        },
     },
     'loggers': {
         'django': {
@@ -196,6 +203,10 @@ LOGGING = {
         },
         'core': {
             'handlers': ['log_file'],
+            'level': 'DEBUG',
+        },
+        'fe': {
+            'handlers': ['fe_log_file'],
             'level': 'DEBUG',
         },
     }
@@ -230,7 +241,10 @@ HOST_NAME = socket.gethostname()
 
 SITE_URL = 'http://devapi.eventure.com/'
 
+LOGIN_URL = '/e/login'
+
 GOOGLE_API_CLIENT_ID = '943142708269.apps.googleusercontent.com'
 GOOGLE_API_CLIENT_SECRET = '2ZIndLAernSicPFHgsi45_0s'
 GOOGLE_API_REDIRECT_URL = SITE_URL + 'oauth2callback'
+
 # EOF

@@ -12,6 +12,8 @@ from core import common as core_common
 from core import models as core_models
 from core import views as core_views
 from fe import forms
+import logging
+logger = logging.getLogger(__name__)
 
 
 class LoginView(View):
@@ -143,6 +145,40 @@ class SetProfileView(View):
             request.user.name = form.cleaned_data['name']
             request.user.save()
             return redirect('fe:welcome-tour')
+
+        return render(request, self.template_name, {'form': form})
+
+
+class AccountSettingsView(View):
+    "Account Settings & Deactivation"
+
+    template_name = "account_settings.html"
+    form_class = forms.AccountSettingsForm
+
+    def get(self, request):
+        acc_settings = get_object_or_404(core_models.AccountSettings, account=request.user.id)
+        form = self.form_class(acc_settings.__dict__)
+        return render(request, self.template_name, {'form': form})
+
+    @transaction.atomic
+    def post(self, request):
+        form = self.form_class(request.POST)
+        if form.is_valid():
+            instance = get_object_or_404(core_models.AccountSettings, account=request.user.id)
+
+            normal_fields = ('email_rsvp_updates', 'email_social_activity', 'email_promotions',
+                            'text_rsvp_updates', 'text_social_activity', 'text_promotions',
+                            'default_event_privacy',)
+
+            for field in normal_fields:
+                val = form.cleaned_data.get(field, getattr(instance, field))
+                setattr(instance, field, val)
+
+            instance.save()
+
+            account = get_object_or_404(core_models.Account, pk=request.user.id)
+            account.profile_privacy = form.cleaned_data.get('profile_privacy', account.profile_privacy)
+            account.save()
 
         return render(request, self.template_name, {'form': form})
 
