@@ -35,9 +35,9 @@ from django.contrib.auth import authenticate, login, logout
 from django.utils import timezone
 from django.contrib.auth import login
 from django.conf import settings
-from oauth2client.client import FlowExchangeError, OAuth2WebServerFlow
+from oauth2client.client import FlowExchangeError, OAuth2WebServerFlow, AccessTokenRefreshError
 from oauth2client.django_orm import Storage
-import googleapiclient
+from googleapiclient.errors import HttpError
 import httplib2
 from apiclient.discovery import build
 import datetime
@@ -624,8 +624,8 @@ def comm_channel_validate(comm_type, request, validation_token, format=None):
 
 
 class GoogleApiAuthorization(APIView):
-    ''' Show if user has connected his google account, and url to authorize if not. 
-    Also, provide the scope & code parameters get from the returned URL so back-end can save the credentials'''
+    ''' Show if user has connected his google account, and url to authorize if not.
+    Also, input the (one-time use) scope & code parameters get from the returned URL so back-end can save the credentials'''
 
     serializer_class = GoogleAuthorizationSerializer
     permission_classes = (permissions.IsAuthenticated, )
@@ -639,7 +639,9 @@ class GoogleApiAuthorization(APIView):
                                    client_secret=settings.GOOGLE_API_CLIENT_SECRET,
                                    scope=scope,
                                    redirect_uri=settings.GOOGLE_API_REDIRECT_URL,
-                                   include_granted_scopes='true')
+                                   include_granted_scopes='true',
+                                   access_type='offline',
+                                   approval_prompt='force')
 
     def get_authorize_uri(self, scope):
         auth_uri = self.get_flow(scope).step1_get_authorize_url()
@@ -659,7 +661,7 @@ class GoogleApiAuthorization(APIView):
                 http = credentials.authorize(httplib2.Http())
                 service = build('calendar', 'v3', http=http)
                 response = service.events().list(calendarId='primary').execute()
-            except googleapiclient.errors.HttpError as e:  # permission error means this scope is not authorized
+            except (HttpError, AccessTokenRefreshError):  # these errors mean this scope is not authorized
                 return False
             else:
                 return True

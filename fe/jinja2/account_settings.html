@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% import "auth_macros.html" as am %}
+
+{% block content %}
+{{ am.logo_row() }}
+
+<div class="row">
+    <div class="col-md-4 col-md-offset-4">
+        <h4>Account Settings & Deactivation</h4>
+    </div>
+</div>
+<div class="row">
+    <div class="col-md-4 col-md-offset-4">
+        <form method="POST">
+            {{ am.form_errors(form) }}
+            {{ am.form_field(form.email_rsvp_updates) }}
+            {{ am.form_field(form.email_social_activity) }}
+            {{ am.form_field(form.email_promotions) }}
+            {{ am.form_field(form.text_rsvp_updates) }}
+            {{ am.form_field(form.text_social_activity) }}
+            {{ am.form_field(form.text_promotions) }}
+            {{ am.form_field(form.default_event_privacy)}}
+            {{ am.form_field(form.profile_privacy) }}
+            
+            <div class="form-group">
+                <button class="btn btn-primary auth-submit" type="submit">Save</button>
+            </div>
+            <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block title %}Account Settings{% endblock %}

@@ -47,10 +47,11 @@ class AccountSelfSerializer(serializers.HyperlinkedModelSerializer):
     profile_photo_file = FileFieldAllowEmpty(allow_empty_file=True, required=False)
     profile_albumfile = serializers.HyperlinkedRelatedField(read_only=True, view_name='albumfile-detail')
     new_phone = serializers.CharField(allow_null=True, max_length=40, required=False, validators=[RegexValidator(r'\+?[0-9(). -]')])
+    full_size_photo_url = serializers.CharField(source='profile_albumfile.file_url', read_only=True)
 
     class Meta:
         model = Account
-        fields = ('url', 'name', 'email', 'phone', 'profile_photo_file', 'profile_albumfile', 'new_phone')
+        fields = ('url', 'name', 'email', 'phone', 'profile_photo_file', 'profile_albumfile', 'new_phone', 'full_size_photo_url')
         read_only_fields = ('email', 'phone')
 
     def validate_profile_photo_file(self, data):
