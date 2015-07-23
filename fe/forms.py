@@ -1,6 +1,5 @@
 from django import forms
 
-
 PASSWORD_MIN_LENGTH = 5
 _email_field = forms.EmailField(label='Your email',
                                 widget=forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'Email'}))
@@ -9,23 +8,19 @@ _password_field = forms.CharField(label='Your password',
                                   widget=forms.PasswordInput(attrs={'class': 'form-control',
                                                                     'placeholder': 'Password'}))
 
-
 class CreateAccountEmailForm(forms.Form):
 
     email = _email_field
     password = _password_field
-
 
 class LoginForm(forms.Form):
 
     email = _email_field
     password = _password_field
 
-
 class ForgotPasswordForm(forms.Form):
 
     email = _email_field
-
 
 class ResetForgotPasswordForm(forms.Form):
 
@@ -47,5 +42,5 @@ class ResetForgotPasswordForm(forms.Form):
 
 class SetProfileForm(forms.Form):
 
-    name = forms.CharField(label="Your name",
+    name = forms.CharField(label="Your full name",
                            widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Name'}))

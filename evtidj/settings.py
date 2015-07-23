@@ -229,6 +229,7 @@ BROKER_TRANSPORT_OPTIONS = {
 HOST_NAME = socket.gethostname()
 
 SITE_URL = 'http://devapi.eventure.com/'
+LOGIN_URL = 'fe:login'
 
 GOOGLE_API_CLIENT_ID = '943142708269.apps.googleusercontent.com'
 GOOGLE_API_CLIENT_SECRET = '2ZIndLAernSicPFHgsi45_0s'

@@ -7,7 +7,7 @@
 <title>{% block title %}Eventure{% endblock %}</title>
 <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css">
 {% block default_css%}
-<link rel="stylesheet" href="{{ static('fe/css/eventure.css') }}"
+<link rel="stylesheet" href="{{ static('fe/css/eventure.css') }}">
 {% endblock %}
 <!--[if lt IE 9]>
       <script src="https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js"></script>
@@ -17,13 +17,18 @@
 <style type="text/css">{% block page_css %}{% endblock %}</style>
 </head>
 <body>
+    {% import "auth_macros.html" as am %}
+    {{ am.logo_row() }}
 	{%block navbar%}{% endblock %}
 	<div class="container">
 	{% block content %}{% endblock %}
 	</div>
 {% block end_js %}
+{% block local_js %}{% endblock %}
 <script src="https://code.jquery.com/jquery-1.11.3.min.js"></script>
 <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
+<script src="{{ static('fe/js/global.js') }}"></script>
+{% block page_js %}{% endblock %}
 {% endblock %}
 </body>
 </html>
