@@ -41,6 +41,7 @@ from googleapiclient.errors import HttpError
 import httplib2
 from apiclient.discovery import build
 import datetime
+from core.shared.google_data_api import GDataClient, CredentialNotExistError, PermissionError
 import logging
 logger = logging.getLogger(__name__)
 
@@ -631,10 +632,12 @@ class GoogleApiAuthorization(APIView):
     permission_classes = (permissions.IsAuthenticated, )
 
     CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar'  # read & write
-    CONTACT_SCOPE = 'https://www.googleapis.com/auth/contacts.readonly'  # read only
+    CONTACT_SCOPE = 'https://www.google.com/m8/feeds'  # read & write
+
+    credentials = None
 
     def get_flow(self, scope):
-        scope = scope.replace('+', ' ')
+        scope = scope.replace('+', ' ').rstrip('#')
         return OAuth2WebServerFlow(client_id=settings.GOOGLE_API_CLIENT_ID,
                                    client_secret=settings.GOOGLE_API_CLIENT_SECRET,
                                    scope=scope,
@@ -647,35 +650,60 @@ class GoogleApiAuthorization(APIView):
         auth_uri = self.get_flow(scope).step1_get_authorize_url()
         return auth_uri
 
+    def get_credentials(self, user):
+        if self.credentials is None:
+            storage = Storage(GoogleCredentials, 'account', user, 'credentials')
+            self.credentials = storage.get()
+        return self.credentials
+
     def is_connected_with_google_account(self, user, scope):
         ''' Test that the user has connected his google account'''
 
-        storage = Storage(GoogleCredentials, 'account', user, 'credentials')
-        credentials = storage.get()
-
-        if credentials is None:
+        if self.get_credentials(user) is None:
             return False
 
         if scope == self.CALENDAR_SCOPE:
             try:
-                http = credentials.authorize(httplib2.Http())
+                http = self.credentials.authorize(httplib2.Http())
                 service = build('calendar', 'v3', http=http)
-                response = service.events().list(calendarId='primary').execute()
+                service.events().list(calendarId='primary').execute()
             except (HttpError, AccessTokenRefreshError):  # these errors mean this scope is not authorized
                 return False
             else:
                 return True
+        elif scope == self.CONTACT_SCOPE:
+            try:
+                gdataclient = GDataClient(user.id)
+                gdataclient.get_json_response('get', 'https://www.google.com/m8/feeds/contacts/default/full')
+            except (CredentialNotExistError, PermissionError, AccessTokenRefreshError):
+                return False
+            else:
+                return True
+
         return False
 
-    def get(self, request, format=None):
-        data = {'is_connected_with_google_calendar': self.is_connected_with_google_account(request.user, self.CALENDAR_SCOPE),
-                # 'google_contact_authorize_uri': self.get_authorize_uri(self.CONTACT_SCOPE),
-                'google_calendar_authorize_url': self.get_authorize_uri(self.CALENDAR_SCOPE),
+    def get_access_token(self, user):
+        "Returns access_token. Guarantee freshness (has not expired)."
+        if self.get_credentials(user) is None:
+            return None
+        if self.credentials.access_token_expired:
+            try:
+                self.credentials.refresh(httplib2.Http())
+            except AccessTokenRefreshError:
+                return None
+        return self.credentials.access_token
 
+    def get(self, request, format=None):
+        data = {'is_connected_with_calendar': self.is_connected_with_google_account(request.user, self.CALENDAR_SCOPE),
+                'is_connected_with_contact': self.is_connected_with_google_account(request.user, self.CONTACT_SCOPE),
+                'google_contact_authorize_url': self.get_authorize_uri(self.CONTACT_SCOPE),
+                'google_calendar_authorize_url': self.get_authorize_uri(self.CALENDAR_SCOPE),
+                'access_token': self.get_access_token(request.user),
                 }
         return Response(data)
 
     def post(self, request, format=None):
+        "Save credentials"
         serializer = GoogleAuthorizationSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=400)
@@ -686,16 +714,13 @@ class GoogleApiAuthorization(APIView):
         flow = self.get_flow(scope)
 
         try:
-            credentials = flow.step2_exchange(code)
+            self.credentials = flow.step2_exchange(code)
         except FlowExchangeError as e:
             return Response({'error': str(e)})
 
         storage = Storage(GoogleCredentials, 'account', request.user, 'credentials')
-        storage.put(credentials)
+        storage.put(self.credentials)
 
-        data = {'is_connected_with_google_calendar': self.is_connected_with_google_account(request.user, self.CALENDAR_SCOPE),
-                }
-
-        return Response(data)
+        return self.get(request)
 
 #EOF
