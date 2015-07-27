@@ -7,34 +7,69 @@
  */
 
 $(document).ready(function(){
+    var $profilePreview = $('.dropzone');
+    $.ajax({
+        url: SELF_API_URL,
+        type: "GET",
+        dataType: "json",
+        crossDomain: true,
+        cache: true,
+        context: document.body,
+        success: function(data) {
+            $profilePreview.html('<div class="dz-message"><img src="' + data.full_size_photo_url + '"/></div>');
+        },
+        error: function(data) {
+            $profilePreview.html('<div class="dz-message">Drop files here or click to upload.<br><span class="note">(Selected files are <strong>not</strong> actually uploaded.)</span></div>')
+        }
+    });
     Dropzone.autoDiscover = false;
     $(".dropzone").dropzone({
         url: SELF_API_URL,
         acceptedFiles: "image/*",
         method: "PUT",
         maxFilesize: 3, // MB
+        parallelUploads: 1,
         uploadMultiple: false,
+        paramName: "profile_photo_file",
         addRemoveLinks: true,
         maxFiles: 1,
-        sending: function(file, xhr, formData) {
-            console.log(formData);
-            formData.append("csrf_token", CSRF_TOKEN);
+        headers: {
+            'X-CSRFToken': CSRF_TOKEN
         },
-        maxfilesexceeded: function(file) {
-            alert('You have uploaded more than 1 Image. Only the first file will be uploaded!');
+        thumbnailWidth: 150,
+        thumbnailHeight: 150,
+        resize: function(file) {
+            var resizeInfo = {
+                srcX: 0,
+                srcY: 0,
+                srcWidth: file.width,
+                srcHeight: file.height,
+                trgX: 0,
+                trgY: 0,
+                trgWidth: this.options.thumbnailWidth,
+                trgHeight: this.options.thumbnailHeight
+            };
+            return resizeInfo;
+        },
+        accept: function(file, done) {
+            done();
+        },
+        init: function() {
+            this.on("maxfilesexceeded", function(file){
+                $('.dz-preview').remove();
+                this.removeAllFiles();
+                this.addFile(file);
+            });
         },
         success: function (file, response) {
-            console.log('success');
-            console.log(file);
-            console.log(response);
+            console.log(response.full_size_photo_url);
+            console.log('success', file, response);
             // var imgName = response;
             // file.previewElement.classList.add("dz-success");
             // console.log(“Successfully uploaded :” + imgName);
         },
         error: function (file, response) {
-            console.log('failed');
-            console.log(file);
-            console.log(response);
+            console.log('failed', file, response);
             // file.previewElement.classList.add("dz-error");
         }
     });
@@ -568,9 +603,9 @@ $(document).ready(function(){
       if (this.element.tagName === "form") {
         this.element.setAttribute("enctype", "multipart/form-data");
       }
-      if (this.element.classList.contains("dropzone") && !this.element.querySelector(".dz-message")) {
-        this.element.appendChild(Dropzone.createElement("<div class=\"dz-default dz-message\"><span>" + this.options.dictDefaultMessage + "</span></div>"));
-      }
+      // if (this.element.classList.contains("dropzone") && !this.element.querySelector(".dz-message")) {
+      //   this.element.appendChild(Dropzone.createElement("<div class=\"dz-default dz-message\"><span>" + this.options.dictDefaultMessage + "</span></div>"));
+      // }
       if (this.clickableElements.length) {
         setupHiddenFileInput = (function(_this) {
           return function() {
@@ -701,6 +736,9 @@ $(document).ready(function(){
             events: {
               "click": function(evt) {
                 if ((clickableElement !== _this.element) || (evt.target === _this.element || Dropzone.elementInside(evt.target, _this.element.querySelector(".dz-message")))) {
+                  return _this.hiddenFileInput.click();
+                }
+                if ((clickableElement !== _this.element) || (evt.target === _this.element || Dropzone.elementInside(evt.target, _this.element.querySelector(".dz-preview")))) {
                   return _this.hiddenFileInput.click();
                 }
               }

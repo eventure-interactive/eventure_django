@@ -19,7 +19,6 @@
 .dropzone .dz-message {
     font-weight: 400;
     text-align: center;
-    margin: 2em 0;
 }
 .dropzone .dz-message .note {
     font-size: 0.8em;
@@ -80,7 +79,7 @@ fieldset[disabled] .btn-default:hover {
     margin-right:-4px;
 }
 img {
-  width: 100%;
+    width: 100%;
 }
 .tab-wrapper .hidden-form {
     display: none;
@@ -356,7 +355,12 @@ label.control-label {
 .dropzone, .dropzone * {
   box-sizing: border-box; }
 
-.dropzone { }
+.dropzone {
+    max-width: 180px;
+    max-height: 180px;
+    overflow: hidden;
+    width: 180px;
+    height: 180px; }
   .dropzone.dz-clickable {
     cursor: pointer; }
     .dropzone.dz-clickable * {
@@ -371,14 +375,17 @@ label.control-label {
       opacity: 0.5; }
   .dropzone .dz-message {
     text-align: center;
-    margin: 2em 0; }
+    border-radius: 80px;
+    width: 100%;
+    overflow: hidden;
+    max-height: 156px; }
   .dropzone .dz-preview {
     display: inline-block;
     vertical-align: top;
     width: 100%;
     position: relative; }
-    .dropzone .dz-preview:hover {
-      z-index: 1000; }
+    .dropzone .dz-preview:hover,
+    .dropzone .dz-message { }
       .dropzone .dz-preview:hover .dz-details {
         opacity: 1; }
     .dropzone .dz-preview.dz-file-preview .dz-image {
@@ -398,7 +405,7 @@ label.control-label {
     .dropzone .dz-preview .dz-remove {
       font-size: 14px;
       text-align: center;
-      display: block;
+      display: none;
       cursor: pointer;
       border: none; }
       .dropzone .dz-preview .dz-remove:hover {
@@ -435,14 +442,13 @@ label.control-label {
         background-color: rgba(255, 255, 255, 0.4);
         padding: 0 0.4em;
         border-radius: 3px; }
-    .dropzone .dz-preview:hover .dz-image img {
-      -webkit-transform: scale(1.05, 1.05);
-      -moz-transform: scale(1.05, 1.05);
-      -ms-transform: scale(1.05, 1.05);
-      -o-transform: scale(1.05, 1.05);
-      filter: blur(8px);
-      -webkit-filter: blur(8px);
-      transform: scale(1.05, 1.05); }
+    .dropzone .dz-preview:hover .dz-image img,
+    .dropzone .dz-message:hover img {
+      -moz-filter: brightness(70%);
+      -ms-filter: brightness(70%);
+      -o-filter: brightness(70%);
+      filter: brightness(70%);
+      -webkit-filter: brightness(70%); }
     .dropzone .dz-preview .dz-image {
       border-radius: 80px;
       overflow: hidden;
