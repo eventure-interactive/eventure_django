@@ -10,11 +10,14 @@
     cursor: pointer;
 }
 .dropzone {
-    border: 2px dashed #0087F7;
-    border-radius: 5px;
+    border: 2px dashed #00aee5;
+    border-radius: 3px;
     background: white;
     padding: 10px;
     display: block;
+}
+.image-exist {
+    border: none;
 }
 .dropzone .dz-message {
     font-weight: 400;
@@ -180,18 +183,15 @@ label.control-label {
     padding: 10px;
 }
 
-/*
- * The MIT License
- * Copyright (c) 2012 Matias Meno <m@tias.me>
- */
 @-webkit-keyframes passing-through {
-  0% {
-    opacity: 0;
-    -webkit-transform: translateY(40px);
-    -moz-transform: translateY(40px);
-    -ms-transform: translateY(40px);
-    -o-transform: translateY(40px);
-    transform: translateY(40px); }
+    0% {
+        opacity: 0;
+        -webkit-transform: translateY(40px);
+        -moz-transform: translateY(40px);
+        -ms-transform: translateY(40px);
+        -o-transform: translateY(40px);
+        transform: translateY(40px);
+    }
   30%, 70% {
     opacity: 1;
     -webkit-transform: translateY(0px);
@@ -355,14 +355,11 @@ label.control-label {
 .dropzone, .dropzone * {
   box-sizing: border-box; }
 
-.dropzone {
-    max-width: 180px;
-    max-height: 180px;
-    overflow: hidden;
-    width: 180px;
-    height: 180px; }
+.dropzone { }
   .dropzone.dz-clickable {
-    cursor: pointer; }
+    cursor: pointer;
+    margin: 0 auto;
+    display: table; }
     .dropzone.dz-clickable * {
       cursor: default; }
     .dropzone.dz-clickable .dz-message, .dropzone.dz-clickable .dz-message * {
@@ -370,7 +367,7 @@ label.control-label {
   .dropzone.dz-started .dz-message {
     display: none; }
   .dropzone.dz-drag-hover {
-    border-style: solid; }
+    border: 2px dashed #00aee5; }
     .dropzone.dz-drag-hover .dz-message {
       opacity: 0.5; }
   .dropzone .dz-message {
@@ -378,12 +375,17 @@ label.control-label {
     border-radius: 80px;
     width: 100%;
     overflow: hidden;
-    max-height: 156px; }
+    font-size: 12px;
+    font-weight: normal;
+    display: table-cell;
+    vertical-align: middle;
+    color: #00aee5;
+    max-width: 160px;}
   .dropzone .dz-preview {
-    display: inline-block;
+    position: relative;
     vertical-align: top;
-    width: 100%;
-    position: relative; }
+    display: inline-block;
+    width: 100%; }
     .dropzone .dz-preview:hover,
     .dropzone .dz-message { }
       .dropzone .dz-preview:hover .dz-details {
@@ -454,8 +456,7 @@ label.control-label {
       overflow: hidden;
       width: 100%;
       height: auto;
-      position: relative;
-      display: block; }
+      position: relative; }
       .dropzone .dz-preview .dz-image img {
         display: block; }
     .dropzone .dz-preview.dz-success .dz-success-mark {

@@ -7,13 +7,12 @@
 	<div class="col-md-4 col-md-offset-4">
 		<form method="POST" id="myAwesomeDropzone">
 			<div class="row-centered photo-row">
-
-				{# Juito, don't know how you want to actually use the the profile image url. Below works: #}
-				{% if profile_img_url %}
-					<div style="width:180px;height:180px;"><img width="180" height="180" src="{{profile_img_url}}"></div>
-				{% endif %}
-
-				<div class="col-md-6 col-centered dropzone dz-clickable">
+				<div class="col-md-6 col-centered dropzone dz-clickable {% if profile_img_url %}image-exist{% endif %}">
+					{% if profile_img_url %}
+						<div class="dz-message"><img width="160" height="160" src="{{profile_img_url}}"></div>
+					{% else %}
+						<div class="dz-message">Drag and Drop image here <br>or click to upload</div>
+					{% endif %}
 				</div>
 			</div>
 			{{ am.form_errors(form) }}

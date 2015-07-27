@@ -16,10 +16,9 @@ $(document).ready(function(){
         cache: true,
         context: document.body,
         success: function(data) {
-            $profilePreview.html('<div class="dz-message"><img src="' + data.full_size_photo_url + '"/></div>');
         },
         error: function(data) {
-            $profilePreview.html('<div class="dz-message">Drop files here or click to upload.<br><span class="note">(Selected files are <strong>not</strong> actually uploaded.)</span></div>')
+            $profilePreview.html('<div class="dz-message">Drop files here or click to upload.</div>')
         }
     });
     Dropzone.autoDiscover = false;
@@ -36,8 +35,8 @@ $(document).ready(function(){
         headers: {
             'X-CSRFToken': CSRF_TOKEN
         },
-        thumbnailWidth: 150,
-        thumbnailHeight: 150,
+        thumbnailWidth: 180,
+        thumbnailHeight: 180,
         resize: function(file) {
             var resizeInfo = {
                 srcX: 0,
@@ -56,17 +55,12 @@ $(document).ready(function(){
         },
         init: function() {
             this.on("maxfilesexceeded", function(file){
-                $('.dz-preview').remove();
                 this.removeAllFiles();
                 this.addFile(file);
             });
         },
         success: function (file, response) {
-            console.log(response.full_size_photo_url);
             console.log('success', file, response);
-            // var imgName = response;
-            // file.previewElement.classList.add("dz-success");
-            // console.log(“Successfully uploaded :” + imgName);
         },
         error: function (file, response) {
             console.log('failed', file, response);

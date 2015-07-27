@@ -20,7 +20,7 @@ $(document).ready(function(){
         }
     });// End of click
 
-    $("form#create-account-form").submit(function(evt){
+    $("form#create-account-form").submit(function(e){
         var accountsApiUrl = ACCOUNTS_API_URL;
         var $submitButton = $('#create-account .btn-default');
         var $inputBox = $('#create-account-form input');
@@ -31,6 +31,9 @@ $(document).ready(function(){
         $.ajax({
             type: "POST",
             url: accountsApiUrl,
+            headers: {
+                'X-CSRFToken': CSRF_TOKEN
+            },
             data: postData,
             dataType: "json",
             crossDomain: true,
@@ -54,9 +57,9 @@ $(document).ready(function(){
                 $("#create-account-form .form-group.has-error").append(errorHTML);
             }
         });
-        evt.preventDefault();
+        e.preventDefault();
     });// End of Submit
-    $("#create-account-email-sent .btn-default").click(function(){
+    // $("#create-account-email-sent .btn-default").click(function(){
         
-    });// End of click
+    // });// End of click
 });// End of ready
