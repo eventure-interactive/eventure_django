@@ -6,7 +6,10 @@ from django.http import HttpResponse, Http404
 from django.template import Template
 from django.views.generic import View
 from django.views.decorators.http import require_safe
+
 from django.contrib.auth import logout
+from django.contrib.auth.decorators import login_required
+from django.utils.decorators import method_decorator
 
 from core import common as core_common
 from core import models as core_models
@@ -198,6 +201,16 @@ class AccountSettingsView(View):
             account.save()
 
         return render(request, self.template_name, {'form': form})
+
+
+class ProfileView(View):
+
+    template_name = "account_profile.html"
+
+    @method_decorator(login_required)
+    def get(self, request):
+        account = {'name': request.user.name}
+        return render(request, self.template_name, {'account': account})
 
 
 def todo_view(request):
