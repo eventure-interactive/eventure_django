@@ -3,6 +3,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase, APIClient
 from core.models import Account, Album, AlbumType, AlbumFile, Thumbnail, Event, EventGuest
 from django.utils import timezone
+import pytz
 import datetime
 from django.test.utils import override_settings
 import time
@@ -77,6 +78,7 @@ class EventTests(APITestCase):
                 'start': (now + datetime.timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 'end': (now + datetime.timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 'location': '3420 Bristol Street, Costa Mesa, CA 92626',
+                'timezone': 'US/Pacific',
                 }
 
         response = self.client.post(url, data, format='json')
@@ -144,12 +146,12 @@ class EventTests(APITestCase):
 
         ''' Update event '''
         new_title = 'New title'
-        new_start = (now + datetime.timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        new_start = (now + datetime.timedelta(minutes=5))
 
-        response = self.client.patch(event_url, {'title': new_title, 'start': new_start})
+        response = self.client.patch(event_url, {'title': new_title, 'start': new_start.strftime("%Y-%m-%dT%H:%M:%SZ"), 'timezone': 'US/Pacific'})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['title'], new_title)
-        self.assertEqual(response.data['start'], new_start)
+        self.assertEqual(response.data['start'], new_start.replace(tzinfo=pytz.timezone('US/Pacific'), microsecond=0).isoformat())  # why Django REST serialize DateTime without millisecond?
 
     def test_find_events(self):
         # Create event

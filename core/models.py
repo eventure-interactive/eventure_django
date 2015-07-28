@@ -12,6 +12,7 @@ from django.core.validators import RegexValidator, MinValueValidator, MaxValueVa
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
 from django.contrib.postgres.fields import HStoreField
 from django.utils import timezone
+import pytz
 from django.utils.translation import ugettext_lazy as _
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -457,6 +458,7 @@ class Event(models.Model):
     title = models.CharField(max_length=100,)
     start = models.DateTimeField()  # UTC start time
     end = models.DateTimeField()  # UTC end time
+    timezone = models.CharField(max_length=50, choices=tuple((tz, tz) for tz in pytz.all_timezones), default='UTC')
     owner = models.ForeignKey('Account', related_name='events')
     guests = models.ManyToManyField('Account', through='EventGuest')
 
@@ -483,6 +485,10 @@ class Event(models.Model):
         self.lon = loc.longitude
 
         self.mpoint = Point(self.lon, self.lat, srid=4326)
+
+        # Incorporate timezone to start, end
+        self.start = self.start.replace(tzinfo=pytz.timezone(self.timezone))
+        self.end = self.end.replace(tzinfo=pytz.timezone(self.timezone))
         super(Event, self).save(*args, **kwargs)
 
 

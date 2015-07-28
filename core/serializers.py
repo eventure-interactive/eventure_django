@@ -8,6 +8,7 @@ from rest_framework import serializers
 from .models import Account, AccountSettings, Album, AlbumType, AlbumFile, Thumbnail, Event, EventGuest, InAppNotification, Follow,\
     Stream, CommChannel, EventPrivacy
 from django.utils import timezone
+import pytz
 import requests
 from .tasks import async_send_notifications, async_add_to_stream
 from core.shared.const.NotificationTypes import NotificationTypes
@@ -347,11 +348,12 @@ class EventSerializer(serializers.HyperlinkedModelSerializer):
     guests = serializers.HyperlinkedIdentityField(view_name='eventguest-list')
     lat = serializers.FloatField(allow_null=True, read_only=True)
     lon = serializers.FloatField(allow_null=True, read_only=True)
+    timezone = serializers.ChoiceField(choices=tuple((tz, tz) for tz in pytz.all_timezones), default='UTC')
     # privacy = serializers.ChoiceField(choices=EventPrivacy.PRIVACY_CHOICES, required=False, default=get_default_event_privacy(serializers.CurrentUserDefault()))
 
     class Meta:
         model = Event
-        fields = ('url', 'title', 'start', 'end', 'owner', 'guests', 'albums', 'location', 'lat', 'lon', 'privacy')
+        fields = ('url', 'title', 'start', 'end', 'timezone', 'owner', 'guests', 'albums', 'location', 'lat', 'lon', 'privacy')
 
     def validate(self, data):
         ''' End Date must be later than Start Date '''
