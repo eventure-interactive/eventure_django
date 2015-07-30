@@ -1,53 +1,64 @@
 {% extends "base.html" %}
 {% import "auth_macros.html" as am %}
+{% block title %}My Eventure Login{% endblock %}
 
 {% block content %}
-{{ am.logo_row() }}
-
-<div class="row">
-	<div class="col-md-4 col-md-offset-4">
-		<h4>Login to Eventure</h4>
-	</div>
-</div>
-<div class="row">
-	<div class="col-md-4 col-md-offset-4">
-		<form method="POST">
-			{{ am.form_errors(form) }}
-			{{ am.form_field(form.email) }}
-			{# Not using macro for password as "forgot password" is special #}
-			<div class="form-group {% if form.password.errors %}has-error{% endif %}">
-				<label class="control-label" for="id_password">{{form.password.label}}</label>
-				{{ form.password }}
-				{% for err in form.password.errors %}
-					<p class="help-block">{{ err }}
-				{% endfor %}
-				<div class="text-right forgot"><a href="{{ url('fe:forgot-password') }}">Forgot password?</a></div>
-			</div>
-			<div class="form-group">
-				<button class="btn btn-primary auth-submit" type="submit">Login</button>
-			</div>
-			<input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
-		</form>
-	</div>
-</div>
-<div class="row new-acct">
-	<div class="col-md-4 col-md-offset-4 text-center">
-		Donʼt have an account? <a href="{{ url('fe:create-account-email') }}">Create one.</a>
-	</div>
+<div class="row row-centered">
+    <div class="tab-wrapper col-md-4 col-centered">
+        <!-- Tab/Toggle -->
+        <section class="tabs row">
+            <div class="tab login selected">Login</div>
+            <div class="tab create-account">Create Account</div>
+        </section>
+        <!-- Login -->
+        <section id="login" class="form">
+        	<form id="login-form" method="POST">
+        		{{ am.form_errors(form) }}
+        		{{ am.form_field(form.email) }}
+        		{# Not using macro for password as "forgot password" is special #}
+        		<div class="password form-group {% if form.password.errors %}has-error{% endif %}">
+        			<label class="control-label" for="id_password">{{form.password.label}}</label>
+        			{{ form.password }}
+        			{% for err in form.password.errors %}
+        				<p class="help-block">{{ err }}
+        			{% endfor %}
+        		</div>
+                <div class="text-right forgot"><a href="{{ url('fe:forgot-password') }}">Forgot password?</a></div>
+        		<div class="form-group row-centered">
+                    <button type="submit" class="col-xs-6 col-centered btn btn-default login-btn">Login</button>
+                </div>
+        		<input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+        	</form>
+            <div class="row new-acct">
+                <div class="text-center">
+                    Donʼt have an account? <a href="#" class="tab">Create one</a>.
+                </div>
+            </div>
+        </section>
+        <!-- Create Account -->
+        <section id="create-account" class="form hidden-form">
+            <form id="create-account-form">
+                {{ am.form_errors(form) }}
+                {{ am.form_field(form.email) }}
+                {{ am.form_field(form.password) }}
+                <div class="form-group row-centered">
+                    <button type="submit" class="col-xs-6 col-centered btn btn-default">Next</button>
+                </div>
+            </form>
+            <div class="text-center">
+                Already have an account? <a href="#" class="tab">Login</a>.
+            </div>
+        </section>
+    </div>
 </div>
 {% endblock %}
-
-{% block title %}Login{% endblock %}
-
-{% block page_css %}
-
-.forgot {
-	margin-top: 5px;
-	font-size: 12px;
-}
-
-.new-acct {
-	margin-top: 25px;
-}
-
+{% block local_js %}
+<script type="text/javascript">
+    var ACCOUNTS_API_URL = "{{url('account-list')}}";
+    var LOGIN_URL = "{{ url('fe:login') }}";
+    var CSRF_TOKEN = "{{ csrf_token }}";
+</script>
+{% endblock %}
+{% block page_js %}
+    <script src="{{ static('fe/js/login.js') }}"></script>
 {% endblock %}

@@ -6,7 +6,10 @@ from django.http import HttpResponse, Http404
 from django.template import Template
 from django.views.generic import View
 from django.views.decorators.http import require_safe
+
 from django.contrib.auth import logout
+from django.contrib.auth.decorators import login_required
+from django.utils.decorators import method_decorator
 
 from core import common as core_common
 from core import models as core_models
@@ -137,7 +140,8 @@ class SetProfileView(View):
 
     def get(self, request):
         form = self.form_class(initial={'name': request.user.name})
-        return render(request, self.template_name, {'form': form})
+        profile_img_url = self._get_profile_img_url(request.user)
+        return render(request, self.template_name, {'form': form, 'profile_img_url': profile_img_url})
 
     def post(self, request):
         form = self.form_class(request.POST)
@@ -146,7 +150,23 @@ class SetProfileView(View):
             request.user.save()
             return redirect('fe:welcome-tour')
 
-        return render(request, self.template_name, {'form': form})
+        profile_img_url = self._get_profile_img_url(request.user)
+        return render(request, self.template_name, {'form': form, 'profile_img_url': profile_img_url})
+
+    def _get_profile_img_url(self, user):
+        af = user.profile_albumfile
+
+        if not af:
+            return None
+
+        try:
+            # Spec calls for 180*180 so should be serving 360*360, but we don't have a
+            # thumbnail that size. Serving the closest thing we have.
+            thumb = af.thumbnails.get(size_type=core_models.Thumbnail.SIZE_320).file_url
+        except core_models.Thumbnail.DoesNotExist:
+            thumb = af.file_url
+
+        return thumb
 
 
 class AccountSettingsView(View):
@@ -181,6 +201,16 @@ class AccountSettingsView(View):
             account.save()
 
         return render(request, self.template_name, {'form': form})
+
+
+class ProfileView(View):
+
+    template_name = "account_profile.html"
+
+    @method_decorator(login_required)
+    def get(self, request):
+        account = {'name': request.user.name}
+        return render(request, self.template_name, {'account': account})
 
 
 def todo_view(request):
