@@ -18,7 +18,6 @@ $(document).ready(function(){
         success: function(data) {
         },
         error: function(data) {
-            $profilePreview.html('<div class="dz-message">Drop files here or click to upload.</div>')
         }
     });
     Dropzone.autoDiscover = false;
