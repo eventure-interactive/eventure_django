@@ -116,14 +116,14 @@ class Account(AbstractBaseUser, PermissionsMixin):
 
     @property
     def is_active(self):
-        return self.status == AccountStatus.ACTIVE
+        return self.status in {AccountStatus.ACTIVE, AccountStatus.SIGNED_UP}
 
     def get_full_name(self):
         return self.name
 
     def get_short_name(self):
 
-        return "{name}... XX{email}".format(name=self.name or '', email=self.email[:5])
+        return self.name
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []

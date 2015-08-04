@@ -1,5 +1,7 @@
-You have signed up an account at Eventure.com
+You have registered at Eventure.com
 
-To verify that you own {{Email}} please click this link {{ActivationUrl}}
+To verify that you own {{Email}} please click this link:
 
-Please discard this email if you think you receive this by mistake.
+ {{ActivationUrl}}
+
+Please discard this email if you think you received this by mistake.

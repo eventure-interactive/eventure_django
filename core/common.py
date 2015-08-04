@@ -3,6 +3,7 @@ from datetime import timedelta
 from functools import partial
 from django.utils import timezone
 from django.core import urlresolvers
+from django.contrib.auth import authenticate, login
 from core import models
 from core import tasks
 
@@ -38,6 +39,8 @@ def create_account(validated_data, request):
         account = Account.objects.create_user(email, password)
 
     send_validation_email(account.id, account.email, partial(_generate_validation_url, request))
+    account = authenticate(email=email, password=password)
+    login(request, account)
     return account
 
 

@@ -32,6 +32,7 @@ from django.contrib.gis.geos import Point
 from geopy.geocoders import GoogleV3
 from django.contrib.gis.measure import D
 from django.contrib.auth import authenticate, login, logout
+from django.contrib import messages
 from django.utils import timezone
 from django.contrib.auth import login
 from django.conf import settings
@@ -620,8 +621,18 @@ def comm_channel_validate(comm_type, request, validation_token, format=None):
         # log in user
         account.backend = 'django.contrib.auth.backends.ModelBackend'  # fake this so we don't need to authenticate before login
         login(request, account)
-        # Redirect to success validation page
-        return redirect('fe:set-profile')
+
+        msg = "Your information is confirmed."
+        if comm_type == CommChannel.EMAIL:
+            msg = "Your email address is confirmed."
+        elif comm_type == CommChannel.PHONE:
+            msg = "Your phone number is confirmed."
+
+        # Fake out the message framework (as we are dealing with a rest Request rather than a Django HttpRequest)
+        if hasattr(request, '_messages'):
+            request._messages.add(messages.SUCCESS, msg, '')
+
+        return redirect('fe:home')
 
 
 class GoogleApiAuthorization(APIView):
