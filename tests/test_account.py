@@ -52,7 +52,7 @@ class AccountTests(APITestCase):
         }
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data['email'], email)
+        self.assertIsNotNone(response.data['url'])
 
         # Replace user, client with new account
         self.user = Account.objects.get(email=email)

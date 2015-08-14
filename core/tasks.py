@@ -9,7 +9,7 @@ from PIL import Image
 import uuid
 from core.models import (
     AlbumFile, Thumbnail, InAppNotification, Stream, Event, Account, AccountSettings, AccountStatus, PasswordReset)
-from core.shared.const.NotificationTypes import NotificationTypes
+from core.shared.const.choice_types import NotificationTypes
 from core.email_sender import send_email, get_template_subject
 from django.core.mail import send_mail
 from django.contrib.contenttypes.models import ContentType

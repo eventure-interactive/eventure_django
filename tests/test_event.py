@@ -2,6 +2,7 @@ from django.core.urlresolvers import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase, APIClient
 from core.models import Account, Album, AlbumType, AlbumFile, Thumbnail, Event, EventGuest
+from core.shared.const.choice_types import EventStatus
 from django.utils import timezone
 import pytz
 import datetime
@@ -49,11 +50,14 @@ class EventTests(APITestCase):
 
         now = timezone.now()
         data = {'title': 'Test Event 2',
-            'start' : (now + datetime.timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            'end'   : (now - datetime.timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")}
+                'start': (now + datetime.timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                'end': (now - datetime.timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                'timezone': 'US/Eastern',
+                }
 
         response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('non_field_errors', response.data)
         self.assertEqual(response.data['non_field_errors'], ['End Date must be later than Start Date'])
 
         data = {'title': 'Test Event 2',
@@ -79,6 +83,7 @@ class EventTests(APITestCase):
                 'end': (now + datetime.timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 'location': '3420 Bristol Street, Costa Mesa, CA 92626',
                 'timezone': 'US/Pacific',
+                'status': EventStatus.ACTIVE.value,
                 }
 
         response = self.client.post(url, data, format='json')
@@ -90,10 +95,10 @@ class EventTests(APITestCase):
         ''' Invite guest user2. user2 should have notifications'''
         url = response.data['guests']
         data = {
-            'guest': reverse('account-detail', kwargs={'pk': self.user2.id}),
+            'guest': "account_id:{}".format(self.user2.id),
         }
         response = self.client.post(url, data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
 
         ''' Check user2 has invite email '''
         invite_mail = mail.outbox[0]
@@ -148,10 +153,15 @@ class EventTests(APITestCase):
         new_title = 'New title'
         new_start = (now + datetime.timedelta(minutes=5))
 
-        response = self.client.patch(event_url, {'title': new_title, 'start': new_start.strftime("%Y-%m-%dT%H:%M:%SZ"), 'timezone': 'US/Pacific'})
+        fmt = "%Y-%m-%dT%H:%M:%SZ"
+
+        response = self.client.patch(event_url, {
+            'title': new_title,
+            'start': new_start.strftime(fmt),
+            'timezone': 'US/Pacific'})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['title'], new_title)
-        self.assertEqual(response.data['start'], new_start.replace(tzinfo=pytz.timezone('US/Pacific'), microsecond=0).isoformat())  # why Django REST serialize DateTime without millisecond?
+        self.assertEqual(response.data['start'], new_start.replace(microsecond=0).strftime(fmt))  # why Django REST serialize DateTime without millisecond?
 
     def test_find_events(self):
         # Create event
@@ -162,10 +172,13 @@ class EventTests(APITestCase):
                 'start': (now + datetime.timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 'end': (now + datetime.timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 'location': '3420 Bristol Street, Costa Mesa, CA 92626',
+                'lat': 33.694144,
+                'lon': -117.885054,
+                'timezone': 'America/Los_Angeles',
                 }
 
         response = self.client.post(url, data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
         event_url = response.data['url']
 
         ''' Find all events in a radius of 100 miles of a random location '''
@@ -216,23 +229,31 @@ class EventTests(APITestCase):
                 'start': (now + datetime.timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 'end': (now + datetime.timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 'location': '3420 Bristol Street, Costa Mesa, CA 92626',
+                'lat': None,
+                'lon': None,
+                'timezone': 'US/Pacific'
                 }
 
         response = self.client.post(url, data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
         event_url = response.data['url']
         guests_url = response.data['guests']
 
         # Invite multiple guests
-        data = [{'guest': reverse('account-detail', kwargs={'pk': self.user2.id})},
-                {'guest': reverse('account-detail', kwargs={'pk': self.user3.id})}
-                ]
+        # data = [{'guest': reverse('account-detail', kwargs={'pk': self.user2.id})},
+        #         {'guest': reverse('account-detail', kwargs={'pk': self.user3.id})}
+        #         ]
+        data = [{'guest': 'account_id:2'}, {'guest': 'account_id:3'}]
         response = self.client.post(guests_url, json.dumps(data), content_type='application/json')
 
         # assert returned guests are correct
-        all_guests = ['http://testserver' + g['guest'] for g in data]
-        for guest in response.data[0]:
-            self.assertIn(guest['guest'], all_guests)
+        expect_name = {'Tidus Hue', 'Patrick Lewis'}
+
+        self.assertEqual(len(response.data), 2, response.data)
+        for guest in response.data:
+            self.assertIn('url', guest)
+            self.assertIn(guest['name'], expect_name)
+            self.assertEqual(guest['rsvp'], 0)
 
     def test_anonymous_user_searches_event(self):
         # Get events

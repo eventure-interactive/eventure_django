@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timedelta
 import tempfile
 from six.moves.urllib.parse import unquote
 from django.conf import settings
@@ -6,14 +7,15 @@ from django.utils.translation import ugettext as _
 from PIL import Image
 from rest_framework import serializers
 from .models import Account, AccountSettings, Album, AlbumType, AlbumFile, Thumbnail, Event, EventGuest, InAppNotification, Follow,\
-    Stream, CommChannel, EventPrivacy
+    Stream, CommChannel, EventPrivacy, ALBUM_TYPE_MAP
 from django.utils import timezone
 import pytz
 import requests
 from .tasks import async_send_notifications, async_add_to_stream
-from core.shared.const.NotificationTypes import NotificationTypes
+from core.shared.const.choice_types import NotificationTypes, EventStatus
 from core.sms_sender import async_send_validation_phone
 from core import common
+from core.validators import EventGuestValidator
 from django.core.validators import RegexValidator
 import logging
 logger = logging.getLogger(__name__)
@@ -30,18 +32,34 @@ class FileFieldAllowEmpty(serializers.FileField):
 
 
 class AccountSerializer(serializers.HyperlinkedModelSerializer):
-    followers = serializers.HyperlinkedIdentityField(read_only=True, view_name='follower-list')
-    followings = serializers.HyperlinkedIdentityField(read_only=True, view_name='following-list')
-    streams = serializers.HyperlinkedIdentityField(read_only=True, view_name='stream-list')
     profile_albumfile = serializers.HyperlinkedRelatedField(read_only=True, view_name='albumfile-detail')
+    email = serializers.CharField(write_only=True)
     password = serializers.CharField(write_only=True, style={'input_type': 'password'})
 
     class Meta:
         model = Account
-        fields = ('url', 'email', 'profile_albumfile', 'followers', 'followings', 'streams', 'password')
+        fields = ('url', 'name', 'email', 'password', 'profile_albumfile')
+        read_only_fields = ('name',)
 
     def create(self, validated_data):
         return common.create_account(validated_data, self.context['request'])
+
+
+def _validate_image_file(imgfile):
+    "Bare validation to make sure what was uploaded is a parseable image."
+
+    imgfile.seek(0)
+
+    try:
+        img = Image.open(imgfile)
+        w, h = img.size
+        format_ = img.format
+    except IOError:
+        raise serializers.ValidationError('Does not appear to be a valid image.')
+
+    imgfile.seek(0)
+
+    return TempImageFileData(width=w, height=h, format=format_, file=imgfile)
 
 
 class AccountSelfSerializer(serializers.HyperlinkedModelSerializer):
@@ -67,33 +85,19 @@ class AccountSelfSerializer(serializers.HyperlinkedModelSerializer):
             msg = _("Source file needs to be an image.")  # TODO: Or a video
             raise serializers.ValidationError(msg)
 
-        img_data = self._validate_img_file(data)
+        img_data = _validate_image_file(data)
         img_data.original_name = data.name
 
         self.context['img_data'] = img_data
 
         return data
 
-    def _validate_img_file(self, imgfile):
-        "Bare validation to make sure what was uploaded is a parseable image."
-
-        imgfile.seek(0)
-
-        try:
-            img = Image.open(imgfile)
-            w, h = img.size
-            format_ = img.format
-        except IOError:
-            raise serializers.ValidationError('Does not appear to be a valid image.')
-
-        imgfile.seek(0)
-
-        return TempImageFileData(width=w, height=h, format=format_, file=imgfile)
-
     def save_profile_photo(self):
         img_data = self.context.get('img_data')
-        profile_album, created = Album.objects.get_or_create(owner=self.context['request'].user, album_type_id=4, defaults={'name': 'Profile Photo Album', 'description': 'Default Profile Photo Album'})
-
+        profile_album, created = Album.objects.get_or_create(owner=self.context['request'].user,
+                                                             album_type_id=ALBUM_TYPE_MAP['DEFAULT_PROFILE'].id,
+                                                             defaults={'name': 'Profile Photo Album',
+                                                                       'description': 'Default Profile Photo Album'})
         if img_data:
             # create image data
             af = AlbumFile(
@@ -339,6 +343,17 @@ class AlbumFileSerializer(serializers.HyperlinkedModelSerializer):
 #         default_event_privacy = account_settings.default_event_privacy
 #     return default_event_privacy
 
+class DateTimeFieldUTC(serializers.DateTimeField):
+    "Converts a non-UTC time to UTC."
+
+    def to_internal_value(self, value):
+        utc = pytz.utc
+        value = super().to_internal_value(value)
+        if value.tzinfo.utcoffset(value) != timedelta(0):
+            # logger.info('Converting {} to UTC'.format(value.tzinfo))
+            value = utc.normalize(value.astimezone(utc))
+        return value
+
 
 class EventSerializer(serializers.HyperlinkedModelSerializer):
 
@@ -346,14 +361,22 @@ class EventSerializer(serializers.HyperlinkedModelSerializer):
     albums = serializers.HyperlinkedRelatedField(many=True, view_name='album-detail', read_only=True)
     # guests = serializers.HyperlinkedRelatedField(many=True, view_name='account-detail', read_only=True)
     guests = serializers.HyperlinkedIdentityField(view_name='eventguest-list')
-    lat = serializers.FloatField(allow_null=True, read_only=True)
-    lon = serializers.FloatField(allow_null=True, read_only=True)
-    timezone = serializers.ChoiceField(choices=tuple((tz, tz) for tz in pytz.all_timezones), default='UTC')
-    # privacy = serializers.ChoiceField(choices=EventPrivacy.PRIVACY_CHOICES, required=False, default=get_default_event_privacy(serializers.CurrentUserDefault()))
+    start = DateTimeFieldUTC(default_timezone=pytz.utc)
+    end = DateTimeFieldUTC(default_timezone=pytz.utc)
+    start_local_time = serializers.SerializerMethodField()
+    end_local_time = serializers.SerializerMethodField()
+    #  end_localized = serializers.SerializerMethodField()
+    lat = serializers.FloatField(allow_null=True, required=False)
+    lon = serializers.FloatField(allow_null=True, required=False)
+
+    featured_image = FileFieldAllowEmpty(allow_empty_file=True, required=False, write_only=True)
+    featured_albumfile = serializers.HyperlinkedRelatedField(read_only=True, view_name='albumfile-detail')
 
     class Meta:
         model = Event
-        fields = ('url', 'title', 'start', 'end', 'timezone', 'owner', 'guests', 'albums', 'location', 'lat', 'lon', 'privacy')
+        fields = ('url', 'title', 'start', 'start_local_time', 'end', 'end_local_time', 'timezone', 'owner', 'guests',
+                  'albums', 'featured_albumfile', 'location', 'lat', 'lon', 'is_all_day', 'status', 'calendar_type',
+                  'privacy', 'featured_image', )
 
     def validate(self, data):
         ''' End Date must be later than Start Date '''
@@ -367,14 +390,45 @@ class EventSerializer(serializers.HyperlinkedModelSerializer):
             raise serializers.ValidationError('Start Date must not be in the past')
         return value
 
-    def update(self, instance, validated_data):
-        instance = super(serializers.HyperlinkedModelSerializer, self).update(instance, validated_data)
+    def validate_featured_image(self, data):
 
+        if not data:
+            return data
+
+        if not data.content_type.startswith('image/'):
+            msg = _("Source file needs to be an image.")
+            raise serializers.ValidationError(msg)
+
+        img_data = _validate_image_file(data)
+        img_data.original_name = data.name
+
+        self.context['featured_img_data'] = img_data
+
+        return data
+
+    def update(self, instance, validated_data):
+        self._set_all_day_times(validated_data)
+        if self.context.get('featured_img_data'):
+            event_af = self.save_featured_image(instance)
+            if event_af is not None:
+                instance.featured_albumfile = event_af
+
+        instance = super().update(instance, validated_data)
         self.send_notifications(instance)
         return instance
 
     def create(self, validated_data):
+        # self._replace_tz(validated_data)
+        self._set_all_day_times(validated_data)
+
+        # Need to save the event so the album has somewhere to attach...
+        validated_data.pop('featured_image', None)
         event = super().create(validated_data)
+
+        if self.context.get('featured_img_data'):
+            self.save_featured_image(event)
+            event.save()
+
         self.add_to_stream(event)
         return event
 
@@ -385,11 +439,71 @@ class EventSerializer(serializers.HyperlinkedModelSerializer):
             async_add_to_stream(Stream.EVENT_CREATE, sender.id, follow.follower.id, 'event', event.id)
 
     def send_notifications(self, event):
+        if event.status == EventStatus.DRAFT.value:
+            return
+
         notification_type = NotificationTypes.EVENT_UPDATE.value
         sender = self.context['request'].user
         guests = event.guests.all()
         for guest in guests:
             async_send_notifications(notification_type, sender.id, guest.id, 'event', event.id)
+
+    def get_start_local_time(self, obj):
+        return self._localized_dt(obj, obj.start)
+
+    def get_end_local_time(self, obj):
+        return self._localized_dt(obj, obj.end)
+
+    def _localized_dt(self, event, date_time):
+        if event.is_all_day:
+            return None
+
+        tz = pytz.timezone(event.timezone)
+        local = tz.normalize(date_time.astimezone(tz))
+        return local.isoformat()
+
+    def _set_all_day_times(self, validated_data):
+        "Strip off times if the event is an all day event."
+        is_all_day = validated_data.get('is_all_day', False)
+        validated_data['is_all_day'] = is_all_day
+
+        to_convert = {}
+        if is_all_day:
+            to_convert['start'] = validated_data['start']
+            to_convert['end'] = validated_data['end']
+
+        for key, dt in to_convert.items():
+            validated_data[key] = datetime(dt.year, dt.month, dt.day, tzinfo=pytz.utc)
+
+    def save_featured_image(self, event):
+        """Save the context 'featured_img data' as an albumfile, and add to the event.
+
+        Saves the Album (if created) and the AlbumFile, but not the event.
+        """
+        img_data = self.context.get('featured_img_data')
+
+        if img_data:
+            event_album, created = Album.objects.get_or_create(
+                owner=self.context['request'].user,
+                album_type=ALBUM_TYPE_MAP['DEFAULT_EVENT'],
+                event=event,
+                defaults={'name': '{} Event Album'.format(event.title),
+                          'description': 'Default album for the {} event'.format(event.title)})
+            # create image data
+            af = AlbumFile(
+                owner=self.context['request'].user,
+                name=img_data.original_name.rsplit('.', 1)[0],
+                width=img_data.width,
+                height=img_data.height,
+                size_bytes=img_data.size_bytes,
+                file_type=AlbumFile.PHOTO_TYPE,
+                status=AlbumFile.PROCESSING)
+
+            af.upload_s3_photo(img_data.file, img_data.format)
+            af.save()
+            event_album.albumfiles.add(af)
+
+            event.featured_albumfile = af
 
 
 class EventGuestHyperlinkedIdentityField(serializers.HyperlinkedIdentityField):
@@ -402,48 +516,38 @@ class EventGuestHyperlinkedIdentityField(serializers.HyperlinkedIdentityField):
             return None
 
         return self.reverse(view_name,
-            kwargs={
-                'event_id': obj.event_id,
-                'guest_id': obj.guest_id
-            },
-            request=request,
-            format=format
-        )
+                            kwargs={
+                                'event_id': obj.event_id,
+                                'guest_id': obj.guest_id
+                            },
+                            request=request,
+                            format=format)
+
+
+class GuestListSerializer(serializers.HyperlinkedModelSerializer):
+
+    url = EventGuestHyperlinkedIdentityField(view_name='eventguest-detail', read_only=True)
+    name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = EventGuest
+        fields = ('url', 'name', 'rsvp')
+
+    def get_name(self, obj):
+        return obj.name or obj.guest.name or None
 
 
 class EventGuestSerializer(serializers.HyperlinkedModelSerializer):
     event = serializers.HyperlinkedRelatedField(read_only=True, view_name='event-detail', )
     # event = serializers.HiddenField(default=None,)
-    guest = serializers.HyperlinkedRelatedField(queryset=Account.objects.all(), view_name='account-detail')
+    # guest = serializers.HyperlinkedRelatedField(queryset=Account.objects.all(), view_name='account-detail')
+    guest = serializers.CharField(allow_blank=False, trim_whitespace=True,
+                                  validators=[EventGuestValidator(Account=Account)])
     url = EventGuestHyperlinkedIdentityField(view_name='eventguest-detail')
 
     class Meta:
         model = EventGuest
         fields = ('url', 'event', 'guest', 'rsvp')
-
-    def create(self, validated_data):
-        event = self.context['event']
-        if event:
-            guest = EventGuest.objects.create(event=event, **validated_data)
-            if guest:
-                self.send_notifications(guest.guest_id)
-                return guest
-
-    def validate(self, data):
-        ''' For creation: Unique together (event, guest). Work-around for unique_together wont work with read-only fields (need value to validate) '''
-        if self.instance is None:  # create not update
-            event = self.context.get('event')
-            guest = data.get('guest')  # or self.instance.guest
-            if EventGuest.objects.filter(event=event, guest=guest).exists():
-                raise serializers.ValidationError('Cannot add same guest to event more than once')
-        return data
-
-    def send_notifications(self, guest_id):
-        notification_type = NotificationTypes.EVENT_INVITE.value
-        sender = self.context['request'].user
-        event = self.context['event']
-
-        async_send_notifications(notification_type, sender.id, guest_id, 'event', event.id)  # async
 
 
 class EventGuestUpdateSerializer(EventGuestSerializer):

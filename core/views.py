@@ -14,19 +14,20 @@ from rest_framework.views import APIView
 from rest_framework import filters
 from core.models import (
     Account, AccountSettings, AccountStatus, Album, AlbumType, AlbumFile, Event, EventGuest,
-    Follow, CommChannel, InAppNotification, PasswordReset, GoogleCredentials)
+    Follow, CommChannel, InAppNotification, PasswordReset, GoogleCredentials, ALBUM_TYPE_MAP)
 from core.serializers import (
     AccountSerializer, AccountSettingsSerializer, AlbumSerializer, AlbumFileSerializer, EventSerializer,
     EventGuestSerializer, EventGuestUpdateSerializer, AlbumUpdateSerializer, InAppNotificationSerializer,
     FollowingSerializer, FollowerSerializer, FollowerUpdateSerializer, StreamSerializer, AccountSelfSerializer,
-    LoginFormSerializer, LoginResponseSerializer, GoogleAuthorizationSerializer, PasswordResetFormSerializer, VerifyPasswordResetFormSerializer)
+    LoginFormSerializer, LoginResponseSerializer, GoogleAuthorizationSerializer, PasswordResetFormSerializer,
+    VerifyPasswordResetFormSerializer, GuestListSerializer)
 from core.permissions import IsAccountOwnerOrReadOnly, IsAlbumUploadableOrReadOnly, IsGrantedAccessToEvent,\
     IsGrantedAccessToAlbum, IsAccountOwnerOrDenied, IsAuthenticatedOrReadOnly
+from core.validators import EventGuestValidator
 from core import common
 from core import tasks
 from django.db.models import Q
 from django.db import transaction
-from django.contrib.auth.models import AnonymousUser
 from django.utils.translation import ugettext as _
 from django.contrib.gis.geos import Point
 from geopy.geocoders import GoogleV3
@@ -43,6 +44,8 @@ import httplib2
 from apiclient.discovery import build
 import datetime
 from core.shared.google_data_api import GDataClient, CredentialNotExistError, PermissionError
+from core.shared.const.choice_types import EventStatus, NotificationTypes
+from core.tasks import async_send_notifications
 import logging
 logger = logging.getLogger(__name__)
 
@@ -250,12 +253,11 @@ class EventList(generics.ListCreateAPIView):
         instance = serializer.save(owner=self.request.user)
 
         # create a default album
-        Album.objects.create(
-            owner=self.request.user,
-            event=instance,
-            name='%s Album' % (instance.title),
-            description='Default Album for Event',
-            album_type=AlbumType.objects.get(name="DEFAULT_EVENT"))
+        Album.objects.get_or_create(owner=self.request.user,
+                                    album_type=ALBUM_TYPE_MAP['DEFAULT_EVENT'],
+                                    event=instance,
+                                    defaults={'name': '{} Event Album'.format(instance.title),
+                                              'description': 'Default album for the {} event'.format(instance.title)})
 
     def get_queryset(self):
         miles = self.request.QUERY_PARAMS.get(self.URL_PARAM_MILES)
@@ -267,10 +269,10 @@ class EventList(generics.ListCreateAPIView):
             geolocator = GoogleV3()
             location = geolocator.geocode(vicinity)
             point = Point(location.longitude, location.latitude)
-            events = Event.objects.filter(mpoint__dwithin=(point, D(mi=miles)))     
+            events = Event.objects.filter(mpoint__dwithin=(point, D(mi=miles)))
 
         # No private events what user dont own or guest of should be shown
-        if isinstance(self.request.user, AnonymousUser):
+        if not self.request.user.is_authenticated():
             events = events.filter(privacy=Event.PUBLIC)
         else:
             events = events.exclude(Q(privacy=Event.PRIVATE),
@@ -312,29 +314,94 @@ class EventGuestList(generics.ListCreateAPIView):
         return context
 
     def get_event(self):
-        try:
-            event = Event.objects.get(pk=self.kwargs['pk'])
-        except Event.DoesNotExist:
-            raise Http404(_('Event does not exist'))
-        return event
+        return get_object_or_404(Event, pk=self.kwargs.get('pk'))
 
     def get_queryset(self):
         event = self.get_event()
         self.check_object_permissions(self.request, event)
         return EventGuest.objects.filter(event=event)
 
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+
+        serializer = GuestListSerializer
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            s = GuestListSerializer(page, many=True, context={'request': request})
+            return self.get_paginated_response(s.data)
+
+        s = GuestLIstSerializer(queryset, many=True, context={'request': request})
+        return Response(s.data)
+
     def create(self, request, *args, **kwargs):
         # Check  for Bulk creation
         many = isinstance(request.data, list)
         serializer = self.get_serializer(data=request.data, many=many)
         serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
-        headers = self.get_success_headers(serializer.data)
+        event_guests = self._create_event_guests(request.data, many)
 
-        if many:
-            return Response([serializer.data], status=status.HTTP_201_CREATED, headers=headers)
-        else:
+        self.send_invite_notifications(event_guests)
+
+        if len(event_guests) == 1:
+            serializer = GuestListSerializer(event_guests[0], context={'request': request})
+            headers = self.get_success_headers(serializer.data)
             return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        else:
+            serializer = GuestListSerializer(event_guests, many=True, context={'request': request})
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @transaction.atomic
+    def _create_event_guests(self, request_data, many):
+        data = request_data
+        if not many:
+            data = [request_data]
+
+        accounts = {}  # account_id = key, name=value
+        for guestdata in data:
+            name, account = self._convert_guest_to_account(guestdata)
+            if account.id in accounts:
+                if name and not accounts[account.id]:
+                    accounts[account.id] = name
+            else:
+                accounts[account.id] = name if name else ""
+        event = self.get_event()
+
+        eventguests = []
+        for account_id, name in accounts.items():
+            eventguests.append(EventGuest.objects.create(
+                event=event,
+                guest_id=account_id,
+                name=name if name else "",
+            ))
+
+        return eventguests
+
+    def _convert_guest_to_account(self, data):
+        validator = EventGuestValidator(Account)
+        parsed = validator(data['guest'])
+        params = {'defaults': {'status':  AccountStatus.CONTACT}}
+        if parsed.type == 'account':
+            return None, Account.actives.get(pk=parsed.value)
+
+        if parsed.type == 'email':
+            params['email'] = parsed.value
+            account, created = Account.objects.get_or_create(**params)
+            return parsed.guest_name, account
+
+        if parsed.type == 'phone':
+            params['phone'] = parsed.value
+            account, created = Account.objects.get_or_create(**params)
+            return parsed.guest_name, account
+
+    def send_invite_notifications(self, event_guests):
+
+        sender = self.request.user
+        notification_type = NotificationTypes.EVENT_INVITE.value
+        for eg in event_guests:
+            if eg.event.status != EventStatus.ACTIVE.value:
+                continue
+            async_send_notifications(notification_type, sender.id, eg.guest_id, 'event', eg.event_id)  # async
 
 
 class EventGuestDetail(MultipleFieldLookupMixin, generics.RetrieveUpdateDestroyAPIView):
