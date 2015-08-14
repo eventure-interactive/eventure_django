@@ -6,7 +6,7 @@ from django.utils.translation import ugettext as _
 from PIL import Image
 from rest_framework import serializers
 from .models import Account, AccountSettings, Album, AlbumType, AlbumFile, Thumbnail, Event, EventGuest, InAppNotification, Follow,\
-    Stream, CommChannel, EventPrivacy
+    Stream, CommChannel, EventPrivacy, AppleCredentials
 from django.utils import timezone
 import pytz
 import requests
@@ -15,6 +15,7 @@ from core.shared.const.NotificationTypes import NotificationTypes
 from core.sms_sender import async_send_validation_phone
 from core import common
 from django.core.validators import RegexValidator
+from core.shared import ical2
 import logging
 logger = logging.getLogger(__name__)
 
@@ -670,4 +671,24 @@ class VerifyPasswordResetFormSerializer(serializers.Serializer):
     email = serializers.EmailField()
     token = serializers.CharField()
     password = serializers.CharField()
+
+
+class AppleCredentialsSerializer(serializers.ModelSerializer):
+    apple_id = serializers.CharField(write_only=True)
+    apple_password = serializers.CharField(write_only=True)
+
+    x_apple_webauth_user = serializers.CharField(source='credentials.x_apple_webauth_user', read_only=True)
+    x_apple_webauth_token = serializers.CharField(source='credentials.x_apple_webauth_token', read_only=True)
+
+    class Meta:
+        model = AppleCredentials
+        fields = ('apple_id', 'apple_password', 'x_apple_webauth_user', 'x_apple_webauth_token')
+
+    def save(self, **kwargs):
+        # Subtitude for both create(), update()
+        validated_data = dict(
+            list(self.validated_data.items()) +
+            list(kwargs.items())
+        )
+        return ical2.save_apple_credentials(**validated_data)
 

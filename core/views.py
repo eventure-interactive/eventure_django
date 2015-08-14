@@ -56,6 +56,7 @@ def api_root(request, format=None):
         'self': reverse('self-detail', request=request, format=format),
         'settings': reverse('self-settings', request=request, format=format),
         'self-google-connect': reverse('google-connect', request=request, format=format),
+        'self-apple-connect': reverse('apple-connect', request=request, format=format),
     })
 
 
@@ -722,5 +723,44 @@ class GoogleApiAuthorization(APIView):
         storage.put(self.credentials)
 
         return self.get(request)
+
+from core.serializers import AppleCredentialsSerializer
+from core.models import AppleCredentials, AppleTokens
+from core.shared.lib.pyicloud.exceptions import PyiCloudFailedLoginException
+class AppleAuthorization(generics.RetrieveUpdateAPIView):
+    serializer_class = AppleCredentialsSerializer
+    permission_classes = (permissions.IsAuthenticated,)
+    queryset = AppleCredentials.objects.all()
+
+    def get_object(self):
+        qs = self.get_queryset()
+        return get_object_or_404(qs, account=self.request.user)
+
+    def update_or_post(self, request):
+        # Initializer serializer based on update or post
+        serializer = None
+        try:
+            instance = AppleCredentials.objects.get(account=self.request.user)
+        except AppleCredentials.DoesNotExist:
+            serializer = self.get_serializer(data=request.data)
+        else:
+            serializer = self.get_serializer(instance, data=request.data)
+
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=400)
+
+        # Save credentials, handle bad id/password
+        try:
+            apple_credentials = serializer.save(account=self.request.user)
+        except PyiCloudFailedLoginException as e:
+            return Response({'error': str(e)}, status=400)
+
+        return Response(apple_credentials.credentials.__dict__)
+
+    def update(self, request):
+        return self.update_or_post(request)
+
+    def post(self, request):
+        return self.update_or_post(request)
 
 #EOF

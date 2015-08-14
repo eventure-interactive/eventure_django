@@ -1,7 +1,8 @@
 from django.db.models.signals import pre_delete, post_save, m2m_changed
 from django.dispatch import receiver
 from django.utils.translation import ugettext as _
-from core.models import Album, Account, AccountSettings
+from core.models import Album, Account, AccountSettings, Event
+from core.shared import ical2
 
 
 class AlbumNotDeletableError(Exception):
@@ -27,3 +28,9 @@ def handle_account_create(sender, instance, created, **kwargs):
     if created:
         settings = AccountSettings(account=instance)
         settings.save()
+
+
+@receiver(post_save, sender=Event)
+def export_to_icloud_calendar(sender, instance, **kwargs):
+    "Create or Update icloud calendar event for owner, guests when an event is saved"
+    ical2.to_icloud(instance)

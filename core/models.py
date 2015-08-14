@@ -171,6 +171,12 @@ class Account(AbstractBaseUser, PermissionsMixin):
         return self.get_short_name()
 
 
+class AppleTokens():
+    def __init__(self, **kwargs):
+        self.x_apple_webauth_user = kwargs.get('x_apple_webauth_user')
+        self.x_apple_webauth_token = kwargs.get('x_apple_webauth_token')
+
+
 class MyCredentialsField(models.Field):
     def __init__(self, *args, **kwargs):
         if 'null' not in kwargs:
@@ -183,7 +189,7 @@ class MyCredentialsField(models.Field):
     def to_python(self, value):
         if value is None:
             return None
-        if isinstance(value, oauth2client.client.Credentials):
+        if isinstance(value, oauth2client.client.Credentials) or isinstance(value, AppleTokens):
             return value
 
         value = value.encode("utf-8")  # string to byte
@@ -206,6 +212,11 @@ class MyCredentialsField(models.Field):
 
 
 class GoogleCredentials(models.Model):
+    account = models.OneToOneField(Account, primary_key=True, )
+    credentials = MyCredentialsField()
+
+
+class AppleCredentials(models.Model):
     account = models.OneToOneField(Account, primary_key=True, )
     credentials = MyCredentialsField()
 
