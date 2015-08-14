@@ -7,11 +7,11 @@ from django.utils.translation import ugettext as _
 from PIL import Image
 from rest_framework import serializers
 from .models import Account, AccountSettings, Album, AlbumType, AlbumFile, Thumbnail, Event, EventGuest, InAppNotification, Follow,\
-    Stream, CommChannel, EventPrivacy, ALBUM_TYPE_MAP
+    CommChannel, EventPrivacy, ALBUM_TYPE_MAP
 from django.utils import timezone
 import pytz
 import requests
-from .tasks import async_send_notifications, async_add_to_stream
+from .tasks import async_send_notifications
 from core.shared.const.choice_types import NotificationTypes, EventStatus
 from core.sms_sender import async_send_validation_phone
 from core import common
@@ -429,14 +429,7 @@ class EventSerializer(serializers.HyperlinkedModelSerializer):
             self.save_featured_image(event)
             event.save()
 
-        self.add_to_stream(event)
         return event
-
-    def add_to_stream(self, event):
-        sender = Account.objects.get(pk=self.context['request'].user.id)
-        followers = sender.followers.filter(status=Follow.APPROVED)
-        for follow in followers:
-            async_add_to_stream(Stream.EVENT_CREATE, sender.id, follow.follower.id, 'event', event.id)
 
     def send_notifications(self, event):
         if event.status == EventStatus.DRAFT.value:
@@ -669,65 +662,6 @@ class FollowerUpdateSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = Follow
         fields = ('follower', 'status',)
-
-"""
-class ConnectionSerializer(serializers.HyperlinkedModelSerializer):
-    connection = serializers.HyperlinkedRelatedField(source='followee', queryset=Account.objects.filter(status=Account.ACTIVE), view_name='account-detail')
-    connection_status = serializers.SerializerMethodField()
-
-    class Meta:
-        model = Follow
-        fields = ('connection', 'connection_status', )
-
-    def get_connection_status(self, obj):
-        try:
-            reverse = Follow.objects.get(follower=obj.followee, followee=obj.follower)
-        except Follow.DoesNotExist:
-            # reverse = Follow(follower=obj.followee, followee=obj.follower, status=Follow.PENDING)
-            pass
-
-        if obj.status == Follow.APPROVED and reverse.status == Follow.APPROVED:
-            return 'connected'
-        # elif Follow.UNAPPROVED in (obj.status, reverse.status):
-        #     return 'denied' 
-        # elif obj.status == Follow.APPROVED and reverse.status == Follow.PENDING:
-        #     return 'pending approval from other party'
-        # elif reverse.status == Follow.APPROVED and obj.status == Follow.PENDING:
-        #     return 'pending approval from you'
-        # elif obj.status == Follow.PENDING and reverse.status == Follow.PENDING:
-        #     return 'pending approval from both parties'
-        else:
-            return '%d %s %d, %d %s %d' % (obj.follower_id, obj.status, obj.followee_id, reverse.follower_id, reverse.status, reverse.followee_id)
-
-    def create(self, validated_data):
-        ''' Create two way following with status PENDING '''
-        follower = self.context['request'].user
-        follow, created = Follow.objects.update_or_create(follower=follower, followee=validated_data.get('followee'), defaults={'status': Follow.PENDING})
-        reverse, created = Follow.objects.update_or_create(followee=follower, follower=validated_data.get('followee'), defaults={'status': Follow.PENDING})
-        return follow
-
-
-class ConnectionUpdateSerializer(serializers.HyperlinkedModelSerializer):
-    connection = serializers.HyperlinkedRelatedField(source='follower', read_only=True, view_name='account-detail')
-
-    class Meta:
-        model = Follow
-        fields = ('connection', 'status',)
-
-    def update(self, instance, data):
-        instance = super().update(instance, data)
-        if data['status'] in (Follow.APPROVED, Follow.UNAPPROVED) and self.context['request'].user == instance.follower:
-            Follow.objects.update_or_create(follower=instance.followee, followee=instance.follower, defaults={'status': data['status']})
-        return instance
-"""
-
-
-class StreamSerializer(serializers.ModelSerializer):
-    content_type = serializers.CharField()
-
-    class Meta:
-        model = Stream
-        fields = ('stream_type', 'data', 'content_type', 'object_id')
 
 
 class EmailOrPhoneField(serializers.CharField):

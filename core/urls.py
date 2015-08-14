@@ -12,7 +12,6 @@ urlpatterns = [
     # url(r'^accounts/(?P<pk>[0-9]+)/connections/$', views.ConnectionList.as_view(), name='connection-list'),
     # url(r'^accounts/(?P<followee_id>[0-9]+)/connections/(?P<follower_id>[0-9]+)/$', views.ConnectionDetail.as_view(), name='connection-detail'),
     url(r'^notifications/$', views.NotificationList.as_view(), name='notification-list'),
-    url(r'^accounts/(?P<pk>[0-9]+)/streams/$', views.StreamList.as_view(), name='stream-list'),
     url(r'^albums/$', views.AlbumList.as_view(), name='album-list'),
     url(r'^albums/(?P<pk>[0-9]+)/$', views.AlbumDetail.as_view(), name='album-detail'),
     url(r'^albums/(?P<pk>[0-9]+)/files/$', views.AlbumFilesList.as_view(), name='albumfiles-list'),

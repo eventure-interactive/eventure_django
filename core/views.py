@@ -18,7 +18,7 @@ from core.models import (
 from core.serializers import (
     AccountSerializer, AccountSettingsSerializer, AlbumSerializer, AlbumFileSerializer, EventSerializer,
     EventGuestSerializer, EventGuestUpdateSerializer, AlbumUpdateSerializer, InAppNotificationSerializer,
-    FollowingSerializer, FollowerSerializer, FollowerUpdateSerializer, StreamSerializer, AccountSelfSerializer,
+    FollowingSerializer, FollowerSerializer, FollowerUpdateSerializer, AccountSelfSerializer,
     LoginFormSerializer, LoginResponseSerializer, GoogleAuthorizationSerializer, PasswordResetFormSerializer,
     VerifyPasswordResetFormSerializer, GuestListSerializer)
 from core.permissions import IsAccountOwnerOrReadOnly, IsAlbumUploadableOrReadOnly, IsGrantedAccessToEvent,\
@@ -501,26 +501,6 @@ class FollowerDetail(MultipleFieldLookupMixin, generics.RetrieveUpdateAPIView):
     queryset = Follow.objects.all()
     serializer_class = FollowerUpdateSerializer
     lookup_fields = ('follower_id', 'followee_id')
-
-
-class StreamList(generics.ListAPIView):
-    permission_classes = (permissions.IsAuthenticated, IsAccountOwnerOrDenied)
-
-    serializer_class = StreamSerializer
-    paginate_by = 20
-
-    def get_account(self):
-        try:
-            account = Account.objects.get(pk=self.kwargs['pk'])
-        except Account.DoesNotExist:
-            raise Http404(_('Account does not exist'))
-        else:
-            return account
-
-    def get_queryset(self):
-        account = self.get_account()
-        self.check_object_permissions(self.request, account)
-        return account.streams.all()
 
 
 class Login(APIView):

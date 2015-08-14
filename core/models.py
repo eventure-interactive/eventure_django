@@ -557,47 +557,6 @@ class Follow(models.Model):
     status = models.SmallIntegerField(choices=STATUS_CHOICES, default=PENDING)
 
 
-class EventInStreamSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Event
-        fields = ('title', 'start', 'location', 'guests')
-
-
-class Stream(models.Model):
-    EVENT_CREATE = 0
-    EVENTGUEST_ADD = 1
-
-    STREAMTYPE_CHOICES = (
-        (EVENT_CREATE, 'EVENT_CREATE'),
-        (EVENTGUEST_ADD, 'EVENTGUEST_ADD'),
-    )
-
-    created = models.DateTimeField(auto_now_add=True)
-    modified = models.DateTimeField(auto_now=True)
-
-    stream_type = models.SmallIntegerField(choices=STREAMTYPE_CHOICES)
-    data = JSONField()
-
-    sender = models.ForeignKey('Account', related_name='sent_streams')
-    recipient = models.ForeignKey('Account', related_name='streams')
-
-    #polymorphic generic relation (ForeignKey to multiple models)
-    content_type = models.ForeignKey(ContentType)
-    object_id = models.PositiveIntegerField()
-    content_object = GenericForeignKey('content_type', 'object_id')
-
-    def save(self, *args, **kwargs):
-        # Auto generate and save json presentation of data
-        serializer = None
-        if self.content_type.model_class() == Event:
-            serializer = EventInStreamSerializer(self.content_object)
-
-
-        if serializer.data is not None:
-            self.data = serializer.data
-        super(Stream, self).save(*args, **kwargs)
-
-
 class CommChannel(models.Model):
     ''' Store info about validation of email or phone of account '''
     EMAIL = 0
