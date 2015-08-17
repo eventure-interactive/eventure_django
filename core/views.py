@@ -88,7 +88,7 @@ class AccountList(generics.ListCreateAPIView):
 
 class AccountDetail(generics.RetrieveAPIView):
     "Show detailed information for the given account."
-    queryset = Account.objects.all()
+    queryset = Account.actives.all()
     serializer_class = AccountSerializer
     permission_classes = (permissions.IsAuthenticated, )
 
@@ -411,6 +411,13 @@ class EventGuestDetail(MultipleFieldLookupMixin, generics.RetrieveUpdateDestroyA
     queryset = EventGuest.objects.all()
     serializer_class = EventGuestUpdateSerializer
     lookup_fields = ('event_id', 'guest_id')
+
+
+class AnonEventGuestDetail(MultipleFieldLookupMixin, generics.RetrieveUpdateAPIView):
+
+    queryset = EventGuest.objects.all()
+    serializer_class = EventGuestUpdateSerializer
+    lookup_fields = ('event_id', 'token')
 
 
 class NotificationCustomPagination(pagination.PageNumberPagination):

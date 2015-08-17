@@ -517,6 +517,7 @@ class EventGuest(models.Model):
     name = models.CharField(max_length=255, blank=True)
     event = models.ForeignKey('Event')
     rsvp = models.SmallIntegerField(choices=RSVP_CHOICES, default=UNDECIDED)
+    token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
 
     # class Meta:
     #     This unique_together constraint is in the db (see migration core 0062_manual_eventguest_unique_constraint)

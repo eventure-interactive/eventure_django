@@ -543,9 +543,16 @@ class EventGuestSerializer(serializers.HyperlinkedModelSerializer):
         fields = ('url', 'event', 'guest', 'rsvp')
 
 
-class EventGuestUpdateSerializer(EventGuestSerializer):
+class EventGuestUpdateSerializer(serializers.HyperlinkedModelSerializer):
     ''' to be used with Event Guest Detail view '''
     guest = serializers.HyperlinkedRelatedField(view_name='account-detail', read_only=True)
+    name = serializers.SerializerMethodField()
+    event = serializers.HyperlinkedRelatedField(read_only=True, view_name='event-detail')
+    url = EventGuestHyperlinkedIdentityField(view_name='eventguest-detail')
+
+    class Meta:
+        model = EventGuest
+        fields = ('url', 'event', 'guest', 'name', 'rsvp')
 
     def update(self, instance, validated_data):
         instance.rsvp = validated_data.get('rsvp')
@@ -562,6 +569,9 @@ class EventGuestUpdateSerializer(EventGuestSerializer):
         recipient = event.owner
 
         async_send_notifications(notification_type, sender.id, recipient.id, 'eventguest', eventguest.id)  # async
+
+    def get_name(self, obj):
+        return obj.name or obj.guest.name or None
 
 
 class AlbumSerializer(serializers.HyperlinkedModelSerializer):

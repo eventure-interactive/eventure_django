@@ -9,6 +9,7 @@ import datetime
 from django.test.utils import override_settings
 import time
 import json
+import re
 from core.tasks import finalize_s3_thumbnails
 from django.core import mail
 
@@ -264,4 +265,48 @@ class EventTests(APITestCase):
         # assert Only PUBLIC events returned
         for event in response.data['results']:
             self.assertEqual(event['privacy'], Event.PUBLIC)
+
+    def test_anonymous_guest(self):
+        "Test that a non-registered guest can RSVP."
+
+        # Create the event
+        now = timezone.now()
+        data = {'title': "Welcome Anonymous Users",
+                'start': (now + datetime.timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                'end': (now + datetime.timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                'location': '3420 Bristol Street, Costa Mesa, CA 92626',
+                'timezone': 'US/Pacific',
+                'status': EventStatus.ACTIVE.value,
+                }
+
+        response = self.client.post(reverse('event-list'), data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        guests_url = response.data['guests']
+
+        # add guest
+        data = {'guest': 'Anonymous McSecret <amcsecret@example.com>'}
+        guest_response = self.client.post(guests_url, data, format='json')
+
+        self.assertEqual(guest_response.status_code, status.HTTP_201_CREATED, guest_response.data)
+
+        match = re.search(r"events/(?P<event_id>\d+)/guests/(?P<guest_id>\d+)/$", guest_response.data['url'])
+        self.assertIsNotNone(match)
+        guest_id = match.group('guest_id')
+        event_id = match.group('event_id')
+
+        eg = EventGuest.objects.get(guest_id=guest_id, event_id=event_id)
+        self.assertIsNotNone(eg)
+
+        # Anonymous guest hits the RSVP endpoint
+        anon_url = reverse('eventguest-detail-anon', kwargs=dict(event_id=event_id, token=eg.token))
+        anon_client = APIClient()
+        response = anon_client.get(anon_url)
+        self.assertEqual(response.data['name'], 'Anonymous McSecret')
+        self.assertEqual(response.data['rsvp'], EventGuest.UNDECIDED)
+
+        response = anon_client.put(anon_url, {'rsvp': EventGuest.YES})
+        self.assertEqual(response.data['name'], 'Anonymous McSecret')
+        self.assertEqual(response.data['rsvp'], EventGuest.YES)
+
 # EOF

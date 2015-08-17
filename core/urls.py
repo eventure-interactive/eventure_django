@@ -20,6 +20,8 @@ urlpatterns = [
     url(r'^events/(?P<pk>[0-9]+)/$', views.EventDetail.as_view(), name='event-detail'),
     url(r'^events/(?P<pk>[0-9]+)/guests/$', views.EventGuestList.as_view(), name='eventguest-list'),
     url(r'^events/(?P<event_id>[0-9]+)/guests/(?P<guest_id>[0-9]+)/$', views.EventGuestDetail.as_view(), name='eventguest-detail'),
+    url(r'^events/(?P<event_id>[0-9]+)/guests/(?P<token>[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})/$',
+        views.AnonEventGuestDetail.as_view(), name='eventguest-detail-anon'),
     url(r'^self/$', views.AccountSelfDetail.as_view(), name='self-detail'),
     url(r'^self/settings/$', views.AccountSettingsDetail.as_view(), name='self-settings'),
     url(r'^authentication/login/', views.Login.as_view(), name='login'),
