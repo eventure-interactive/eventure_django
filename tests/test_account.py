@@ -41,27 +41,12 @@ class AccountTests(APITestCase):
         self.assertEqual('http://testserver' + account_detail_url, response.data['url'])
 
     def test_create_deactivate_account(self):
-        # log out of tidushue account
-        self.client.logout()
-        # create account
-        url = reverse('account-list')
-        email, password = 'a@mail.com', 'password123'
-        data = {
-            'email': email,
-            'password': password,
-        }
-        response = self.client.post(url, data)
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertIsNotNone(response.data['url'])
+
+        validation_email = self._create_and_send_email()
 
         # Replace user, client with new account
-        self.user = Account.objects.get(email=email)
+        self.user = Account.objects.get(email='a@mail.com')
         self.client = APIClient()
-
-        # see if validation email is sent
-        validation_email = mail.outbox[0]
-        self.assertEqual(validation_email.subject, 'Eventure Email Verification')
-        self.assertEqual(validation_email.to[0], email)
 
         # Get the token
         pattern = re.compile(r'email-validate/(?P<validation_token>[\w|\-]+)/')
@@ -71,6 +56,8 @@ class AccountTests(APITestCase):
         url = reverse('email-validate', kwargs={'validation_token': validation_token})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_302_FOUND)
+        redirect = response.get('location')
+        self.assertEqual(redirect, 'http://testserver' + reverse('fe:home'))
 
         # try to log in with that account
         # response = self.client.login(username=email, password=password)
@@ -97,5 +84,43 @@ class AccountTests(APITestCase):
         response = self.client.delete(url)
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(response.data['successful'], 'Account has been deactivated.')
+
+    def test_creation_tokens(self):
+
+        self._create_and_send_email()
+        self.assertEqual(len(mail.outbox), 1)
+
+        # Shouldn't get multiple emails (mini-spam prevention)
+        self._create_and_send_email(validate_mail_sent=False)
+        self.assertEqual(len(mail.outbox), 1)
+
+        # should fail if we get the wrong token
+        url = reverse('email-validate', kwargs={'validation_token': 'aaaabbbb-2222-3333-4444-000011112222'})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
+        self.assertEqual(response.get('location'), 'http://testserver' + reverse('fe:bad-channel-validation'))
+
+    def _create_and_send_email(self, validate_mail_sent=True):
+
+        # log out of tidushue account
+        self.client.logout()
+        # create account
+        url = reverse('account-list')
+        email, password = 'a@mail.com', 'password123'
+        data = {
+            'email': email,
+            'password': password,
+        }
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIsNotNone(response.data['url'])
+
+        if validate_mail_sent:
+            # see if validation email is sent
+            validation_email = mail.outbox[0]
+            self.assertEqual(validation_email.subject, 'Eventure Email Verification')
+            self.assertEqual(validation_email.to[0], email)
+
+            return validation_email
 
 #EOF

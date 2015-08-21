@@ -5,6 +5,7 @@ from django.core.urlresolvers import reverse
 from django.core import mail
 from django.utils import timezone
 from core.models import Account, AccountStatus, PasswordReset
+from datetime import timedelta
 from core import tasks
 
 
@@ -118,6 +119,19 @@ class PasswordResetTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password(password))
+
+    def test_cannot_use_stale_token(self):
+
+        sent_dt = timezone.now() - timedelta(days=1, hours=1)
+        pr = PasswordReset(email=self.user.email, account=self.user, message_sent_date=sent_dt)
+
+        url = reverse("verify-password-reset")
+        password = 'imexpired'
+        resp = self.client.post(url, {'email': self.user.email,
+                                      'password': password,
+                                      'token': pr.get_password_reset_token()})
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(resp.data.get('error', '').startswith('Token not valid'))
 
     def _get_token(self):
         pwreset = PasswordReset.objects.get(email=self.user.email)

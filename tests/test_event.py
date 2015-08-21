@@ -309,4 +309,57 @@ class EventTests(APITestCase):
         self.assertEqual(response.data['name'], 'Anonymous McSecret')
         self.assertEqual(response.data['rsvp'], EventGuest.YES)
 
+    def test_guest_variations(self):
+        "Test different guest formats are accepted."
+
+        # Create the event
+        now = timezone.now()
+        data = {'title': "Welcome Different user types Users",
+                'start': (now + datetime.timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                'end': (now + datetime.timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                'location': 'TBD',
+                'timezone': 'US/Pacific',
+                'status': EventStatus.DRAFT.value,
+                }
+
+        response = self.client.post(reverse('event-list'), data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        guests_url = response.data['guests']
+
+        guests = (
+            'Test Email <guest.one@example.com>',
+            'guest.two@example.com',
+            'Test Phone <+16575551234>',
+            '+16575551235',
+            'account_id:{}'.format(self.user2.id),
+        )
+
+        for guest in guests:
+            response = self.client.post(guests_url, {'guest': guest}, format='json')
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        resp = self.client.get(guests_url)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['count'], 5)
+
+        # test bad formats
+        bad_guests = (
+            '+199999',
+            '+44 20 8366 1177',
+            '16572001110',
+            'phony@email',
+            'really no information at all',
+            'account_id:10000000',
+            'account_id:foo'
+        )
+
+        for bad in bad_guests:
+            response = self.client.post(guests_url, {'guest': bad}, format='json')
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, (bad, response.data))
+
+        resp = self.client.get(guests_url)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['count'], 5)
+
 # EOF

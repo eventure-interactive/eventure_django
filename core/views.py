@@ -694,12 +694,11 @@ class VerifyPasswordReset(APIView):
         # Find the candidate reset(s)
         pwresets = PasswordReset.objects.filter(
             email=serializer.data['email'],
-            reset_date=None,
-            message_sent_date__gt=(timezone.now() - PasswordReset.TOKEN_EXPIRY_TIMEDELTA))
+            reset_date=None)
 
         recovery_pwr = None
         for pwr in pwresets:
-            if pwr.get_password_reset_token() == serializer.data['token']:
+            if pwr.get_password_reset_token() == serializer.data['token'] and pwr.can_still_use():
                 recovery_pwr = pwr
                 break
 
