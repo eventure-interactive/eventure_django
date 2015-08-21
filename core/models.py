@@ -6,7 +6,7 @@ import phonenumbers
 from phonenumbers.phonenumberutil import NumberParseException
 import mimetypes
 import hashlib
-from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.fields import GenericForeignKey, GenericRelation
 from django.contrib.contenttypes.models import ContentType
 from django.core.validators import RegexValidator, MinValueValidator, MaxValueValidator, EmailValidator
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
@@ -477,6 +477,7 @@ class Event(models.Model):
     mpoint = models.PointField(null=True, geography=True)
     is_all_day = models.BooleanField(default=False)
     featured_albumfile = models.ForeignKey('AlbumFile', blank=True, null=True)
+    comments = GenericRelation('Comment')
 
     created = models.DateTimeField(auto_now_add=True)
     modified = models.DateTimeField(auto_now=True)
@@ -630,3 +631,21 @@ class PasswordReset(models.Model):
         self.reset_date = timezone.now()
         self.save()
         self.account.save()
+
+
+class Comment(models.Model):
+    "Comment on something."
+
+    owner = models.ForeignKey('Account')
+    parent = models.ForeignKey('Comment', null=True, blank=True, related_name='responses')
+    text = models.TextField()
+
+    content_type = models.ForeignKey(ContentType)
+    object_id = models.PositiveIntegerField()
+    content_object = GenericForeignKey('content_type', 'object_id')
+
+    created = models.DateTimeField(auto_now_add=True)
+    modified = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.text

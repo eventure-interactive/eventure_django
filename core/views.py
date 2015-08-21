@@ -14,15 +14,17 @@ from rest_framework.views import APIView
 from rest_framework import filters
 from core.models import (
     Account, AccountSettings, AccountStatus, Album, AlbumType, AlbumFile, Event, EventGuest,
-    Follow, CommChannel, InAppNotification, PasswordReset, GoogleCredentials, ALBUM_TYPE_MAP)
+    Follow, CommChannel, InAppNotification, PasswordReset, GoogleCredentials, ALBUM_TYPE_MAP,
+    Comment)
 from core.serializers import (
     AccountSerializer, AccountSettingsSerializer, AlbumSerializer, AlbumFileSerializer, EventSerializer,
     EventGuestSerializer, EventGuestUpdateSerializer, AlbumUpdateSerializer, InAppNotificationSerializer,
     FollowingSerializer, FollowerSerializer, FollowerUpdateSerializer, AccountSelfSerializer,
     LoginFormSerializer, LoginResponseSerializer, GoogleAuthorizationSerializer, PasswordResetFormSerializer,
-    VerifyPasswordResetFormSerializer, GuestListSerializer)
+    VerifyPasswordResetFormSerializer, GuestListSerializer, EventCommentListSerializer, EventCommentSerializer,
+    EventCommentResponseSerializer)
 from core.permissions import IsAccountOwnerOrReadOnly, IsAlbumUploadableOrReadOnly, IsGrantedAccessToEvent,\
-    IsGrantedAccessToAlbum, IsAccountOwnerOrDenied, IsAuthenticatedOrReadOnly
+    IsGrantedAccessToAlbum, IsAccountOwnerOrDenied, IsAuthenticatedOrReadOnly, CanCommentOnEvent
 from core.validators import EventGuestValidator
 from core import common
 from core import tasks
@@ -34,6 +36,7 @@ from geopy.geocoders import GoogleV3
 from django.contrib.gis.measure import D
 from django.contrib.auth import authenticate, login, logout
 from django.contrib import messages
+from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
 from django.contrib.auth import login
 from django.conf import settings
@@ -418,6 +421,94 @@ class AnonEventGuestDetail(MultipleFieldLookupMixin, generics.RetrieveUpdateAPIV
     queryset = EventGuest.objects.all()
     serializer_class = EventGuestUpdateSerializer
     lookup_fields = ('event_id', 'token')
+
+
+# Defining this global variable to help us in tests. For some reason, the test pick up a stale
+# version of the content type when finding the event content type in class variables. So,
+# its a global so that the test suite can reset this value everywhere in the views module at once.
+# It's this or writing a get_queryset for each class, which seems unneccessary just to get tests to work.
+# Also tried setting contenttypes as a fixture, and that didn't seem to work either.
+
+EVENT_CONTENT_TYPE = ContentType.objects.get_for_model(Event)
+
+
+class EventCommentList(generics.ListCreateAPIView):
+
+    permission_classes = (permissions.IsAuthenticatedOrReadOnly, CanCommentOnEvent)
+    serializer_class = EventCommentListSerializer
+    content_type = ContentType.objects.get_for_model(Event)
+
+    def get_queryset(self):
+        event = Event.objects.get(pk=self.kwargs['event_id'])
+        self.check_object_permissions(self.request, event)
+        return event.comments.filter(parent=None).order_by('created')
+
+    def create(self, request, *args, **kwargs):
+
+        event = Event.objects.get(pk=self.kwargs['event_id'])
+        self.check_object_permissions(self.request, event)
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        text = serializer.validated_data['text']
+
+        comment = Comment.objects.create(owner=request.user,
+                                         object_id=event.id,
+                                         content_type=EVENT_CONTENT_TYPE,
+                                         text=text)
+
+        serializer = self.get_serializer(comment, context={'request': request})
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+
+class EventCommentDetail(generics.RetrieveUpdateDestroyAPIView):
+
+    permission_classes = (permissions.IsAuthenticatedOrReadOnly, CanCommentOnEvent)
+
+    serializer_class = EventCommentSerializer
+    queryset = Comment.objects.filter()
+
+
+class EventCommentResponseList(generics.ListCreateAPIView):
+
+    permission_classes = (permissions.IsAuthenticatedOrReadOnly, CanCommentOnEvent)
+
+    queryset = Comment.objects.filter(content_type=EVENT_CONTENT_TYPE)
+
+    serializer_class = EventCommentResponseSerializer
+
+    def get_queryset(self):
+        event = Event.objects.get(pk=self.kwargs['event_id'])
+        self.check_object_permissions(self.request, event)
+        return Comment.objects.filter(object_id=event.pk, parent_id=self.kwargs['comment_id']).order_by('created')
+
+    def create(self, request, *args, **kwargs):
+
+        event = Event.objects.get(pk=self.kwargs['event_id'])
+        self.check_object_permissions(self.request, event)
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        text = serializer.validated_data['text']
+        comment = Comment.objects.create(owner=request.user,
+                                         object_id=kwargs['event_id'],
+                                         parent_id=kwargs['comment_id'],
+                                         content_type=EVENT_CONTENT_TYPE,
+                                         text=text)
+
+        serializer = self.get_serializer(comment, context={'request': request})
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+
+class EventCommentResponseDetail(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = (permissions.IsAuthenticatedOrReadOnly, CanCommentOnEvent)
+    queryset = Comment.objects.filter()
+
+    serializer_class = EventCommentResponseSerializer
 
 
 class NotificationCustomPagination(pagination.PageNumberPagination):
