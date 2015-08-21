@@ -263,8 +263,8 @@ class EventList(generics.ListCreateAPIView):
                                               'description': 'Default album for the {} event'.format(instance.title)})
 
     def get_queryset(self):
-        miles = self.request.QUERY_PARAMS.get(self.URL_PARAM_MILES)
-        vicinity = self.request.QUERY_PARAMS.get(self.URL_PARAM_VICINITY)
+        miles = self.request.query_params.get(self.URL_PARAM_MILES)
+        vicinity = self.request.query_params.get(self.URL_PARAM_VICINITY)
 
         events = Event.objects.all()
 
