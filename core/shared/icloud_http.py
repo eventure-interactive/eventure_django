@@ -3,7 +3,7 @@ import json
 from .lib import pyicloud
 from requests.cookies import RequestsCookieJar
 from datetime import datetime
-from core.models import AppleCredentials, AppleTokens
+from core.models import AppleCredentials, AppleTokens, EventGuest
 from .lib.pyicloud import PyiCloudService
 from .lib.pyicloud.services.calendar import monthrange
 from .lib.pyicloud.exceptions import PyiCloudFailedLoginException
@@ -51,105 +51,76 @@ def to_ical_event(event):
     return event_dict
 
 
-def export_to_icloud(ical_event, account):
+def export_to_icloud(ical_event, account, rsvp, ac):
     """ Create/Update icloud calendar event for account using Apple Tokens
     Params: ical_event: event in icloud format
             account: core.models.account
+            rsvp: EventGuest.YES,NO,MAYBE. Remove from calendar if NO/UNDECIDED
+            ac: AppleCredentials of account
     """
-    try:
-        ac = AppleCredentials.objects.get(account=account)
-    except AppleCredentials.DoesNotExist:
-        logger.debug('Account ID %s does not have apple credentials. No event exported.' % account.id)
+
+    # Get end date and start date of the month of event start
+    event_start = to_datetime(ical_event['Event']['startDate'])
+    first_day, last_day = monthrange(event_start.year, event_start.month)
+    from_dt = datetime(event_start.year, event_start.month, first_day)
+    to_dt = datetime(event_start.year, event_start.month, last_day)
+
+    # URL params api.params
+    dsid_pattern = re.compile(r'd=(?P<dsid>[0-9]+)')
+    dsid = dsid_pattern.search(ac.credentials.x_apple_webauth_user).group('dsid')
+    params = {
+        'clientBuildNumber': '15D108',  # faking icloud.com
+        'clientId': '21999DC1-E51B-4165-8E27-3A94AD328CF6',
+        'clientVersion': '5.1',
+        'dsid': dsid,
+        'lang': 'en-us',
+        'usertz': ical_event['Event']['tz'],
+        'startDate': from_dt.strftime('%Y-%m-%d'),
+        'endDate': to_dt.strftime('%Y-%m-%d'),
+        }
+
+    # If account RSVP NO, delete from calendar
+    if rsvp == EventGuest.NO or rsvp == EventGuest.UNDECIDED:
+        params.update({'methodOverride': 'DELETE'})
+
+    # Request Payload/body
+    payload = ical_event
+
+    # Request Url
+    guid = payload['Event']['guid']
+    # Default to put event in Home Calendar, ASSUMTION: everyone has Home Calendar!
+    pguid = 'home'
+    host = 'p03-calendarws.icloud.com'  # any pxx host is fine
+    url = '%s/%s/%s' % ('https://' + host + '/ca/events', pguid, guid)
+
+    # Session Request
+    session = requests.Session()
+
+    # Session Headers session.headers
+    headers = {
+        'origin': 'https://www.icloud.com',
+        'host': host,
+        'Accept': '*/*',
+        'Accept-Encoding': 'gzip, deflate',
+        'Connection': 'keep-alive',
+        'User-Agent': 'Opera/9.52 (X11; Linux i686; U; en)',
+        'referer': 'https://www.icloud.com/'
+        }
+
+    # Session Cookies
+    session.cookies = RequestsCookieJar()
+    session.cookies.set(name='X-APPLE-WEBAUTH-USER', value=ac.credentials.x_apple_webauth_user, domain='.icloud.com', path='/')
+    session.cookies.set(name='X-APPLE-WEBAUTH-TOKEN', value=ac.credentials.x_apple_webauth_token, domain='.icloud.com', path='/')
+
+    # POST request
+    response = session.post(url, params=params, data=json.dumps(payload), headers=headers)
+
+    if response.status_code == 421:
+        logger.error('Account ID %s token is invalid')
     else:
-        # Get end date and start date of the month of event start
-        event_start = to_datetime(ical_event['Event']['startDate'])
-        first_day, last_day = monthrange(event_start.year, event_start.month)
-        from_dt = datetime(event_start.year, event_start.month, first_day)
-        to_dt = datetime(event_start.year, event_start.month, last_day)
+        logger.info('Account ID %s: status code %s response %s' % (account.id, response.status_code, response.text))
 
-        # URL params api.params
-        dsid_pattern = re.compile(r'd=(?P<dsid>[0-9]+)')
-        dsid = dsid_pattern.search(ac.credentials.x_apple_webauth_user).group('dsid')
-        params = {
-            'clientBuildNumber': '15D108',  # faking icloud.com
-            'clientId': '21999DC1-E51B-4165-8E27-3A94AD328CF6',
-            'clientVersion': '5.1',
-            'dsid': dsid,
-            'lang': 'en-us',
-            'usertz': ical_event['Event']['tz'],
-            'startDate': from_dt.strftime('%Y-%m-%d'),
-            'endDate': to_dt.strftime('%Y-%m-%d'),
-            }
-
-        # Request Payload/body
-        payload = ical_event
-
-        # Request Url
-        guid = payload['Event']['guid']
-        # Default to put event in Home Calendar, ASSUMTION: everyone has Home Calendar!
-        pguid = 'home'
-        host = 'p36-calendarws.icloud.com'  # any pxx host is fine
-        url = '%s/%s/%s' % ('https://' + host + '/ca/events', pguid, guid)
-
-        # Session Request
-        session = requests.Session()
-
-        # Session Headers session.headers
-        headers = {
-            'origin': 'https://www.icloud.com',
-            'host': host,
-            'Accept': '*/*',
-            'Accept-Encoding': 'gzip, deflate',
-            'Connection': 'keep-alive',
-            'User-Agent': 'Opera/9.52 (X11; Linux i686; U; en)',
-            'referer': 'https://www.icloud.com/'
-            }
-
-        # Session Cookies
-        session.cookies = RequestsCookieJar()
-        session.cookies.set(name='X-APPLE-WEBAUTH-USER', value=ac.credentials.x_apple_webauth_user, domain='.icloud.com', path='/')
-        session.cookies.set(name='X-APPLE-WEBAUTH-TOKEN', value=ac.credentials.x_apple_webauth_token, domain='.icloud.com', path='/')
-
-        # POST request
-        response = session.post(url, params=params, data=json.dumps(payload), headers=headers)
-
-        # if response.status_code == 421:
-        #     raise PyiCloudFailedLoginException('Invalid tokens')
-
-        return response
-
-
-def to_icloud(event):
-    """
-    Create or Update an event on owner & guests' icloud Calendar
-    Params: event: core.models.event
-    """
-    # TODO: need to check that event status is not draft
-    ical_event = to_ical_event(event)
-    # Combine event's owner with event's guests
-    accounts = [event.owner] + list(event.guests.all())
-
-    for account in accounts:
-        response = export_to_icloud(ical_event, account)
-        # Log if error
-        if response is not None and response.status_code != 200:
-            logger.error(response.json())
-
-
-def save_apple_credentials(apple_id, apple_password, account):
-    """Convert apple_id, apple_password to a set of 2 apple tokens.
-    These tokens are later used to authorize requests to icloud
-    THIS NEEDS TO MOVE TO FRONT-END
-    """
-    api = PyiCloudService(apple_id, apple_password)
-
-    tokens = AppleTokens(
-        x_apple_webauth_user=api.session.cookies['X-APPLE-WEBAUTH-USER'],
-        x_apple_webauth_token=api.session.cookies['X-APPLE-WEBAUTH-TOKEN'],  #TODO: Account with 2 step verification will not have this
-        )
-
-    apple_credentials, created = AppleCredentials.objects.update_or_create(account=account, defaults={'credentials': tokens, })
-    return apple_credentials
+    return response
 
 
 def get_contacts(account):

@@ -173,6 +173,8 @@ class Account(AbstractBaseUser, PermissionsMixin):
 
 class AppleTokens():
     def __init__(self, **kwargs):
+        self.apple_id = kwargs.get('apple_id')
+        self.apple_password = kwargs.get('apple_password')  # app specific password
         self.x_apple_webauth_user = kwargs.get('x_apple_webauth_user')
         self.x_apple_webauth_token = kwargs.get('x_apple_webauth_token')
 
@@ -217,7 +219,7 @@ class GoogleCredentials(models.Model):
 
 
 class AppleCredentials(models.Model):
-    account = models.OneToOneField(Account, primary_key=True, )
+    account = models.OneToOneField(Account, primary_key=True, related_name='apple_credentials')
     credentials = MyCredentialsField()
 
 
