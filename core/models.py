@@ -6,7 +6,7 @@ import phonenumbers
 from phonenumbers.phonenumberutil import NumberParseException
 import mimetypes
 import hashlib
-from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.fields import GenericForeignKey, GenericRelation
 from django.contrib.contenttypes.models import ContentType
 from django.core.validators import RegexValidator, MinValueValidator, MaxValueValidator, EmailValidator
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
@@ -18,8 +18,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.contrib.gis.db import models
 from django.contrib.gis.geos import Point
-from geopy.geocoders import GoogleV3
-from core.shared.const.NotificationTypes import NotificationTypes
+from core.shared.const.choice_types import NotificationTypes, CalendarTypes, EventStatus
 from jsonfield import JSONField
 from rest_framework import serializers
 from core.modelfields import EmptyStringToNoneField
@@ -116,14 +115,14 @@ class Account(AbstractBaseUser, PermissionsMixin):
 
     @property
     def is_active(self):
-        return self.status == AccountStatus.ACTIVE
+        return self.status in {AccountStatus.ACTIVE, AccountStatus.SIGNED_UP}
 
     def get_full_name(self):
         return self.name
 
     def get_short_name(self):
 
-        return "{name}... XX{email}".format(name=self.name or '', email=self.email[:5])
+        return self.name
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []
@@ -240,6 +239,8 @@ class AccountSettings(models.Model):
     class Meta:
         verbose_name_plural = "account settings"
 
+    _color_validator = RegexValidator(r"[A-Fa-f0-9]{6}", message="Not a valid color (needs to be in hex format, e.g. FE00AC)")
+
     account = models.OneToOneField(Account, primary_key=True)
     email_rsvp_updates = models.BooleanField(default=True)
     email_social_activity = models.BooleanField(default=True)
@@ -248,6 +249,8 @@ class AccountSettings(models.Model):
     text_social_activity = models.NullBooleanField()
     text_promotions = models.NullBooleanField()
     default_event_privacy = models.PositiveSmallIntegerField(choices=EventPrivacy.PRIVACY_CHOICES, default=EventPrivacy.PRIVATE)
+    work_calendar_color = models.CharField(max_length=6, default="FF7979", validators=[_color_validator])
+    home_calendar_color = models.CharField(max_length=6, default="00AEE3", validators=[_color_validator])
     created = models.DateTimeField(auto_now_add=True)
     modified = models.DateTimeField(auto_now=True)
 
@@ -271,6 +274,9 @@ class AlbumType(models.Model):
 
     def __str__(self):
         return self.name
+
+# Contains name as key and AlbumType object as value
+ALBUM_TYPE_MAP = dict((at.name, at) for at in AlbumType.objects.all())
 
 
 class ActiveStatusManager(models.Manager):
@@ -465,22 +471,29 @@ class Event(models.Model):
     PRIVATE = EventPrivacy.PRIVATE
     PUBLIC = EventPrivacy.PUBLIC
 
-    created = models.DateTimeField(auto_now_add=True)
-    modified = models.DateTimeField(auto_now=True)
-
     title = models.CharField(max_length=100,)
-    start = models.DateTimeField()  # UTC start time
-    end = models.DateTimeField()  # UTC end time
-    timezone = models.CharField(max_length=50, choices=tuple((tz, tz) for tz in pytz.all_timezones), default='UTC')
+    start = models.DateTimeField()
+    end = models.DateTimeField()
+    timezone = models.CharField(max_length=40, choices=[(tz, tz) for tz in pytz.common_timezones])
     owner = models.ForeignKey('Account', related_name='events')
     guests = models.ManyToManyField('Account', through='EventGuest')
 
     privacy = models.SmallIntegerField(choices=EventPrivacy.PRIVACY_CHOICES, default=PUBLIC)
+    calendar_type = models.PositiveSmallIntegerField(choices=CalendarTypes.choices(),
+                                                     default=CalendarTypes.PERSONAL_CALENDAR.value)
+    status = models.PositiveSmallIntegerField(choices=EventStatus.choices(),
+                                              default=EventStatus.DRAFT.value)
 
     location = models.CharField(max_length=250, null=True)
     lon = models.FloatField(null=True)
     lat = models.FloatField(null=True)
     mpoint = models.PointField(null=True, geography=True)
+    is_all_day = models.BooleanField(default=False)
+    featured_albumfile = models.ForeignKey('AlbumFile', blank=True, null=True)
+    comments = GenericRelation('Comment')
+
+    created = models.DateTimeField(auto_now_add=True)
+    modified = models.DateTimeField(auto_now=True)
 
     objects = models.GeoManager()
 
@@ -491,17 +504,10 @@ class Event(models.Model):
         return "%s %s" % (self.id, self.title)
 
     def save(self, *args, **kwargs):
-        # Geocoding to get lat lon and update PointField on create/update
-        geolocator = GoogleV3()
-        loc = geolocator.geocode(self.location)
-        self.lat = loc.latitude
-        self.lon = loc.longitude
 
-        self.mpoint = Point(self.lon, self.lat, srid=4326)
+        if self.lon is not None and self.lat is not None:
+            self.mpoint = Point(self.lon, self.lat, srid=4326)
 
-        # Incorporate timezone to start, end
-        self.start = self.start.replace(tzinfo=pytz.timezone(self.timezone))
-        self.end = self.end.replace(tzinfo=pytz.timezone(self.timezone))
         super(Event, self).save(*args, **kwargs)
 
 
@@ -522,10 +528,14 @@ class EventGuest(models.Model):
     modified = models.DateTimeField(auto_now=True)
 
     guest = models.ForeignKey('Account', related_name='guests')
+    name = models.CharField(max_length=255, blank=True)
     event = models.ForeignKey('Event')
     rsvp = models.SmallIntegerField(choices=RSVP_CHOICES, default=UNDECIDED)
+    token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
 
-    # class Meta: # comment out so event can be read-only in serializer
+    # class Meta:
+    #     This unique_together constraint is in the db (see migration core 0062_manual_eventguest_unique_constraint)
+    #     but causes problems in the rest api, so it's commented out of the model.
     #     unique_together = (("guest", "event"),)
 
 
@@ -560,47 +570,6 @@ class Follow(models.Model):
     follower = models.ForeignKey('Account', related_name='followings')
     followee = models.ForeignKey('Account', related_name='followers')
     status = models.SmallIntegerField(choices=STATUS_CHOICES, default=PENDING)
-
-
-class EventInStreamSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Event
-        fields = ('title', 'start', 'location', 'guests')
-
-
-class Stream(models.Model):
-    EVENT_CREATE = 0
-    EVENTGUEST_ADD = 1
-
-    STREAMTYPE_CHOICES = (
-        (EVENT_CREATE, 'EVENT_CREATE'),
-        (EVENTGUEST_ADD, 'EVENTGUEST_ADD'),
-    )
-
-    created = models.DateTimeField(auto_now_add=True)
-    modified = models.DateTimeField(auto_now=True)
-
-    stream_type = models.SmallIntegerField(choices=STREAMTYPE_CHOICES)
-    data = JSONField()
-
-    sender = models.ForeignKey('Account', related_name='sent_streams')
-    recipient = models.ForeignKey('Account', related_name='streams')
-
-    #polymorphic generic relation (ForeignKey to multiple models)
-    content_type = models.ForeignKey(ContentType)
-    object_id = models.PositiveIntegerField()
-    content_object = GenericForeignKey('content_type', 'object_id')
-
-    def save(self, *args, **kwargs):
-        # Auto generate and save json presentation of data
-        serializer = None
-        if self.content_type.model_class() == Event:
-            serializer = EventInStreamSerializer(self.content_object)
-
-
-        if serializer.data is not None:
-            self.data = serializer.data
-        super(Stream, self).save(*args, **kwargs)
 
 
 class CommChannel(models.Model):
@@ -675,3 +644,21 @@ class PasswordReset(models.Model):
         self.reset_date = timezone.now()
         self.save()
         self.account.save()
+
+
+class Comment(models.Model):
+    "Comment on something."
+
+    owner = models.ForeignKey('Account')
+    parent = models.ForeignKey('Comment', null=True, blank=True, related_name='responses')
+    text = models.TextField()
+
+    content_type = models.ForeignKey(ContentType)
+    object_id = models.PositiveIntegerField()
+    content_object = GenericForeignKey('content_type', 'object_id')
+
+    created = models.DateTimeField(auto_now_add=True)
+    modified = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.text

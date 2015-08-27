@@ -3,7 +3,7 @@ from django.core.mail import EmailMultiAlternatives, EmailMessage
 from django.core import mail
 from django.template import Context
 from django.template.loader import get_template
-from core.shared.const.NotificationTypes import NotificationTypes
+from core.shared.const.choice_types import NotificationTypes
 from django.contrib.contenttypes.models import ContentType
 from core.models import Account, CommChannel
 from celery import shared_task

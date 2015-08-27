@@ -13,4 +13,22 @@ class ChoiceEnum(Enum):
         # format into django choice tuple
         choices = tuple([(p[1].value, p[0]) for p in props])
         return choices
-#EOF
+
+
+class NotificationTypes(ChoiceEnum):
+    EVENT_INVITE = 1
+    EVENT_UPDATE = 3
+    EVENTGUEST_RSVP = 2
+    ALBUMFILE_UPLOAD = 4
+    ACCOUNT_EMAIL_VALIDATE = 5
+
+
+class CalendarTypes(ChoiceEnum):
+    WORK_CALENDAR = 1
+    PERSONAL_CALENDAR = 2
+
+
+class EventStatus(ChoiceEnum):
+    DRAFT = 1
+    ACTIVE = 2
+    CANCELLED = 3

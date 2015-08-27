@@ -5,7 +5,7 @@ from rest_framework.test import APITestCase
 # from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIRequestFactory, APIClient
-from core.models import Account, Album, AlbumType, AlbumFile, Thumbnail, Event, EventGuest
+from core.models import Account, Album, AlbumType, AlbumFile, Thumbnail, Event, EventGuest, EventPrivacy
 from core.views import AlbumList
 from django.utils import timezone
 import datetime
@@ -52,11 +52,12 @@ class PrivacyTests(APITestCase):
             'start' : (now + datetime.timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
             'end'   : (now + datetime.timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
             'location': '3420 Bristol Street, Costa Mesa, CA 92626',
-            'privacy': 2, # PRIVATE
+            'privacy': EventPrivacy.PRIVATE,
+            'timezone': 'US/Mountain',
             }
 
         response = self.client.post(url, data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
         album_url = response.data['albums'][0]
         event_url = response.data['url']
 

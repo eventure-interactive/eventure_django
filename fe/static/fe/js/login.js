@@ -42,7 +42,8 @@ $(document).ready(function(){
                 $formGroup.removeClass("has-error");
                 $helprBlock.remove();
                 $inputBox.attr("disabled", true);
-                $('.tab-wrapper').html('<section id="create-account-email-sent"><div class="row"><div class="text-center"><p>We will be sending you an email with a link <br>to verify that this is you.<p>Click the link in the email to finish creating your account.</p></div></div><div class="row"><div class="text-center"><a href="#" class="col-xs-6 col-centered btn btn-default">Ok, got it.</a></div></div></section>');
+                $('.tab-wrapper').html('<section id="create-account-email-sent"><div class="row"><div class="text-center"><p>We will be sending you an email with a link to verify your account.<p>Please click the link in the email to finalize verification.</p></div></div>' +
+                    '<div class="row"><div class="text-center"><a href="' + PROFILE_URL + '" class="col-xs-6 col-centered btn btn-default">Ok, got it.</a></div></div></section>');
             },
             error: function (data) {
                 // error handler

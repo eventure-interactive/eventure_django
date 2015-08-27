@@ -14,6 +14,7 @@ https://docs.djangoproject.com/en/1.8/ref/settings/
 import os
 import socket
 from six.moves.urllib.parse import quote
+from django.contrib import messages
 from kombu import Exchange, Queue
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -210,6 +211,14 @@ LOGGING = {
             'level': 'DEBUG',
         },
     }
+}
+
+# Message level to CSS class mapping
+MESSAGE_TAGS = {
+    messages.INFO: 'alert-info',
+    messages.SUCCESS: 'alert-success',
+    messages.WARNING: 'alert-warning',
+    messages.ERROR: 'alert-danger',
 }
 
 # These credentials are for the eventure-mediaserver-dev account

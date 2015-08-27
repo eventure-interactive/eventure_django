@@ -5,6 +5,7 @@ from rest_framework.test import APITestCase
 # from django.contrib.auth.models import User
 from rest_framework.test import APIClient
 from core.models import Account, AlbumType, Event
+from core.shared.const.choice_types import EventStatus
 from django.utils import timezone
 import datetime
 from django.test.utils import override_settings
@@ -45,10 +46,12 @@ class FollowTests(APITestCase):
         now = timezone.now()
         data = {'title': 'Test Event Follow 1',
                 'start': (now + datetime.timedelta(seconds=10)).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                'end': (now + datetime.timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")}
+                'end': (now + datetime.timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                'timezone': 'America/Kentucky/Louisville',
+                'status': EventStatus.ACTIVE.value}
 
         response = self.client.post(url, data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
         return response
 
     @override_settings(CELERY_EAGER_PROPAGATES_EXCEPTIONS=True,
@@ -63,16 +66,16 @@ class FollowTests(APITestCase):
         # user invites user2
         url = response.data['guests']
         data = {
-            'guest': reverse('account-detail', kwargs={'pk': self.user2.id}),
+            'guest': 'account_id:{}'.format(self.user2.id),
         }
         response = self.client.post(url, data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
         # user2 must have event notification
         url = reverse('notification-list')
         response = self.client2.get(url)
 
         ntf = response.data['results'][0]
-        self.assertEqual(ntf['object_id'], event_id)
+        self.assertEqual(ntf['object_id'], event_id, ntf)
         self.assertEqual(ntf['content_type'], 'event')
         self.assertEqual(ntf['notification_type'], 1)  # EVENT_INVITE
 

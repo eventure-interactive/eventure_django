@@ -77,7 +77,7 @@ class AccountSettingsAPITests(APITestCase):
 
         for params in test_params:
             expect.update(params)
-            response = self.client.put(url, params)
+            response = self.client.patch(url, params)
 
             self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
             self.assertEqual(expect, response.data,

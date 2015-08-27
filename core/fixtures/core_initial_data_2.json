@@ -6845,7 +6845,8 @@
         "modified": "2015-06-17T21:43:08.207Z",
         "title": "Celebration",
         "lon": -117.9186689,
-        "privacy": 1
+        "privacy": 1,
+        "timezone" : "US/Pacific"
     },
     "model": "core.event"
 },

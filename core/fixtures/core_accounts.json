@@ -1,0 +1,65 @@
+[
+    {
+        "fields": {
+            "date_joined": "2015-06-17T21:26:58Z",
+            "email": "huy.nguyen@eventure.com",
+            "groups": [],
+            "is_staff": false,
+            "is_superuser": false,
+            "last_login": "2015-07-09T17:28:56.284Z",
+            "last_ntf_checked": "2015-06-17T21:27:30.724Z",
+            "modified": "2015-07-08T17:37:28.104Z",
+            "name": "Huy Nguyen",
+            "password": "pbkdf2_sha256$20000$YUqxz6cwESBF$N6ajWxhoOxKu6lNwxDu3FTJWR3R4QeMmvtiDyC+PM5A=",
+            "phone": "+17146032364",
+            "profile_albumfile": null,
+            "show_welcome_page": true,
+            "status": 3,
+            "user_permissions": []
+        },
+        "model": "core.account",
+        "pk": 1
+    },
+    {
+        "fields": {
+            "date_joined": "2015-04-02T16:05:37Z",
+            "email": "patrick.lewis@eventure.com",
+            "groups": [],
+            "is_staff": false,
+            "is_superuser": false,
+            "last_login": "2015-04-20T22:41:02.590Z",
+            "last_ntf_checked": null,
+            "modified": "2015-04-20T19:58:43.827Z",
+            "name": "Patrick Lewis",
+            "password": "pbkdf2_sha256$20000$cdMMvRnTM6cO$GX2u/9teuDUgTkrc6lTj/TIOYSKAEjWUhOZUxRev3Ek=",
+            "phone": "+16572001110",
+            "profile_albumfile": null,
+            "show_welcome_page": true,
+            "status": 3,
+            "user_permissions": []
+        },
+        "model": "core.account",
+        "pk": 2
+    },
+    {
+        "fields": {
+            "date_joined": "2015-04-03T16:05:37Z",
+            "email": "test.user@eventure.com",
+            "groups": [],
+            "is_staff": false,
+            "is_superuser": false,
+            "last_login": "2015-04-22T22:41:02.590Z",
+            "last_ntf_checked": null,
+            "modified": "2015-04-22T22:41:02.590Z",
+            "name": "Test User",
+            "password": "pbkdf2_sha256$20000$cdMMvRnTM6cO$GX2u/9teuDUgTkrc6lTj/TIOYSKAEjWUhOZUxRev3Ek=",
+            "phone": "+16572011110",
+            "profile_albumfile": null,
+            "show_welcome_page": true,
+            "status": 3,
+            "user_permissions": []
+        },
+        "model": "core.account",
+        "pk": 3
+    }
+]

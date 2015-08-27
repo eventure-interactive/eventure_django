@@ -1,5 +1,5 @@
 from rest_framework import permissions
-from core.models import Event, EventGuest, Album, AlbumFile, Follow, Account
+from core.models import Event, EventGuest, Album, AlbumFile, Follow, Account, Comment
 import logging
 logger = logging.getLogger(__name__)
 
@@ -73,27 +73,6 @@ class IsOwner(permissions.BasePermission):
         return obj.owner_id == request.user.id
 
 
-# DEPRICATED/UNUSED
-# class IsEventOwnerOrReadOnly(permissions.BasePermission):
-#     """
-#     Custom permission to only allow owner of the event to edit it.
-#     """
-
-#     def has_object_permission(self, request, view, obj):
-#         # Read permissions are allowed to any request,
-#         # so we'll always allow GET, HEAD or OPTIONS requests.
-#         if request.method in permissions.SAFE_METHODS:
-#             return True
-
-#         # Write permissions are only allowed to the owner of the event.
-#         # Only Event Owner can edit Guests
-#         if isinstance(obj, EventGuest):
-#             return obj.event.owner == request.user
-#         # Only Event Owner can edit event
-#         elif isinstance(obj, Event):
-#             return obj.owner == request.user
-
-
 class IsGrantedAccessToEvent(permissions.BasePermission):
     """
     Read access Denied for Private Event that user is not a member, all else Granted
@@ -110,6 +89,37 @@ class IsGrantedAccessToEvent(permissions.BasePermission):
         elif isinstance(obj, EventGuest):
             # The guest himself can read/write or if user can access event
             return self.has_object_permission(request, view, obj.event) or obj.guest == request.user
+
+
+class CanCommentOnEvent(permissions.BasePermission):
+
+    def has_object_permission(self, request, view, obj):
+        if isinstance(obj, Event):
+            event = obj
+        elif isinstance(obj, Comment):
+            event = obj.content_object
+        else:
+            raise ValueError("Unexpected object type {}".format(type(obj)))
+
+        # These are my best guesses at permissions; don't treat as gospel.
+
+        if request.method in permissions.SAFE_METHODS:
+            return event.privacy != Event.PRIVATE or _is_event_member(event, request.user)
+
+        if request.method == 'POST':
+            # Only guests can comment. ? Is public open to everyone? Not as implemented...
+            return _is_event_member(event, request.user)
+
+        if request.method in ('PUT', 'PATCH'):
+            # Only the owner of the comment can edit it
+            return obj.owner_id == request.user.id
+
+        if request.method == 'DELETE':
+            # Only the owner of the comment or the owner of the event can delete it
+            return request.user.id in (obj.owner_id, event.owner_id)
+
+        logger.error("Unexpected request method: {}".format(request.method))
+        return False
 
 
 def _is_event_member(event, account):

@@ -8,8 +8,8 @@ from django.conf import settings
 from PIL import Image
 import uuid
 from core.models import (
-    AlbumFile, Thumbnail, InAppNotification, Stream, Event, Account, AccountSettings, AccountStatus, PasswordReset)
-from core.shared.const.NotificationTypes import NotificationTypes
+    AlbumFile, Thumbnail, InAppNotification, Event, Account, AccountSettings, AccountStatus, PasswordReset)
+from core.shared.const.choice_types import NotificationTypes
 from core.email_sender import send_email, get_template_subject
 from django.core.mail import send_mail
 from django.contrib.contenttypes.models import ContentType
@@ -18,20 +18,6 @@ from django.template.loader import get_template
 from django.utils import timezone
 
 logger = logging.getLogger('core.tasks')
-
-
-###################### STREAM #####################
-def async_add_to_stream(stream_type, sender_id, recipient_id, obj_model_class, obj_id):
-    addstream = add_to_stream.s(stream_type, sender_id, recipient_id, obj_model_class, obj_id)
-    return addstream.delay()
-
-
-@shared_task
-def add_to_stream(stream_type, sender_id, recipient_id, obj_model_class, obj_id):
-    content_type = ContentType.objects.get(app_label=AlbumFile._meta.app_label, model=obj_model_class)
-    content_object = content_type.get_object_for_this_type(pk=obj_id)
-
-    Stream.objects.create(stream_type=stream_type, sender_id=sender_id, recipient_id=recipient_id, content_object=content_object)
 
 
 ################### NOTIFICATIONS ##################

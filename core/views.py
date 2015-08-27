@@ -14,24 +14,29 @@ from rest_framework.views import APIView
 from rest_framework import filters
 from core.models import (
     Account, AccountSettings, AccountStatus, Album, AlbumType, AlbumFile, Event, EventGuest,
-    Follow, CommChannel, InAppNotification, PasswordReset, GoogleCredentials)
+    Follow, CommChannel, InAppNotification, PasswordReset, GoogleCredentials, ALBUM_TYPE_MAP,
+    Comment)
 from core.serializers import (
     AccountSerializer, AccountSettingsSerializer, AlbumSerializer, AlbumFileSerializer, EventSerializer,
     EventGuestSerializer, EventGuestUpdateSerializer, AlbumUpdateSerializer, InAppNotificationSerializer,
-    FollowingSerializer, FollowerSerializer, FollowerUpdateSerializer, StreamSerializer, AccountSelfSerializer,
-    LoginFormSerializer, LoginResponseSerializer, GoogleAuthorizationSerializer, PasswordResetFormSerializer, VerifyPasswordResetFormSerializer)
+    FollowingSerializer, FollowerSerializer, FollowerUpdateSerializer, AccountSelfSerializer,
+    LoginFormSerializer, LoginResponseSerializer, GoogleAuthorizationSerializer, PasswordResetFormSerializer,
+    VerifyPasswordResetFormSerializer, GuestListSerializer, EventCommentListSerializer, EventCommentSerializer,
+    EventCommentResponseSerializer)
 from core.permissions import IsAccountOwnerOrReadOnly, IsAlbumUploadableOrReadOnly, IsGrantedAccessToEvent,\
-    IsGrantedAccessToAlbum, IsAccountOwnerOrDenied, IsAuthenticatedOrReadOnly
+    IsGrantedAccessToAlbum, IsAccountOwnerOrDenied, IsAuthenticatedOrReadOnly, CanCommentOnEvent
+from core.validators import EventGuestValidator
 from core import common
 from core import tasks
 from django.db.models import Q
 from django.db import transaction
-from django.contrib.auth.models import AnonymousUser
 from django.utils.translation import ugettext as _
 from django.contrib.gis.geos import Point
 from geopy.geocoders import GoogleV3
 from django.contrib.gis.measure import D
 from django.contrib.auth import authenticate, login, logout
+from django.contrib import messages
+from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
 from django.contrib.auth import login
 from django.conf import settings
@@ -42,6 +47,8 @@ import httplib2
 from apiclient.discovery import build
 import datetime
 from core.shared.google_data_api import GDataClient, CredentialNotExistError, PermissionError
+from core.shared.const.choice_types import EventStatus, NotificationTypes
+from core.tasks import async_send_notifications
 import logging
 logger = logging.getLogger(__name__)
 
@@ -85,7 +92,7 @@ class AccountList(generics.ListCreateAPIView):
 
 class AccountDetail(generics.RetrieveAPIView):
     "Show detailed information for the given account."
-    queryset = Account.objects.all()
+    queryset = Account.actives.all()
     serializer_class = AccountSerializer
     permission_classes = (permissions.IsAuthenticated, )
 
@@ -250,16 +257,15 @@ class EventList(generics.ListCreateAPIView):
         instance = serializer.save(owner=self.request.user)
 
         # create a default album
-        Album.objects.create(
-            owner=self.request.user,
-            event=instance,
-            name='%s Album' % (instance.title),
-            description='Default Album for Event',
-            album_type=AlbumType.objects.get(name="DEFAULT_EVENT"))
+        Album.objects.get_or_create(owner=self.request.user,
+                                    album_type=ALBUM_TYPE_MAP['DEFAULT_EVENT'],
+                                    event=instance,
+                                    defaults={'name': '{} Event Album'.format(instance.title),
+                                              'description': 'Default album for the {} event'.format(instance.title)})
 
     def get_queryset(self):
-        miles = self.request.QUERY_PARAMS.get(self.URL_PARAM_MILES)
-        vicinity = self.request.QUERY_PARAMS.get(self.URL_PARAM_VICINITY)
+        miles = self.request.query_params.get(self.URL_PARAM_MILES)
+        vicinity = self.request.query_params.get(self.URL_PARAM_VICINITY)
 
         events = Event.objects.all()
 
@@ -267,10 +273,10 @@ class EventList(generics.ListCreateAPIView):
             geolocator = GoogleV3()
             location = geolocator.geocode(vicinity)
             point = Point(location.longitude, location.latitude)
-            events = Event.objects.filter(mpoint__dwithin=(point, D(mi=miles)))     
+            events = Event.objects.filter(mpoint__dwithin=(point, D(mi=miles)))
 
         # No private events what user dont own or guest of should be shown
-        if isinstance(self.request.user, AnonymousUser):
+        if not self.request.user.is_authenticated():
             events = events.filter(privacy=Event.PUBLIC)
         else:
             events = events.exclude(Q(privacy=Event.PRIVATE),
@@ -312,29 +318,94 @@ class EventGuestList(generics.ListCreateAPIView):
         return context
 
     def get_event(self):
-        try:
-            event = Event.objects.get(pk=self.kwargs['pk'])
-        except Event.DoesNotExist:
-            raise Http404(_('Event does not exist'))
-        return event
+        return get_object_or_404(Event, pk=self.kwargs.get('pk'))
 
     def get_queryset(self):
         event = self.get_event()
         self.check_object_permissions(self.request, event)
         return EventGuest.objects.filter(event=event)
 
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+
+        serializer = GuestListSerializer
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            s = GuestListSerializer(page, many=True, context={'request': request})
+            return self.get_paginated_response(s.data)
+
+        s = GuestLIstSerializer(queryset, many=True, context={'request': request})
+        return Response(s.data)
+
     def create(self, request, *args, **kwargs):
         # Check  for Bulk creation
         many = isinstance(request.data, list)
         serializer = self.get_serializer(data=request.data, many=many)
         serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
-        headers = self.get_success_headers(serializer.data)
+        event_guests = self._create_event_guests(request.data, many)
 
-        if many:
-            return Response([serializer.data], status=status.HTTP_201_CREATED, headers=headers)
-        else:
+        self.send_invite_notifications(event_guests)
+
+        if len(event_guests) == 1:
+            serializer = GuestListSerializer(event_guests[0], context={'request': request})
+            headers = self.get_success_headers(serializer.data)
             return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        else:
+            serializer = GuestListSerializer(event_guests, many=True, context={'request': request})
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @transaction.atomic
+    def _create_event_guests(self, request_data, many):
+        data = request_data
+        if not many:
+            data = [request_data]
+
+        accounts = {}  # account_id = key, name=value
+        for guestdata in data:
+            name, account = self._convert_guest_to_account(guestdata)
+            if account.id in accounts:
+                if name and not accounts[account.id]:
+                    accounts[account.id] = name
+            else:
+                accounts[account.id] = name if name else ""
+        event = self.get_event()
+
+        eventguests = []
+        for account_id, name in accounts.items():
+            eventguests.append(EventGuest.objects.create(
+                event=event,
+                guest_id=account_id,
+                name=name if name else "",
+            ))
+
+        return eventguests
+
+    def _convert_guest_to_account(self, data):
+        validator = EventGuestValidator(Account)
+        parsed = validator(data['guest'])
+        params = {'defaults': {'status':  AccountStatus.CONTACT}}
+        if parsed.type == 'account':
+            return None, Account.actives.get(pk=parsed.value)
+
+        if parsed.type == 'email':
+            params['email'] = parsed.value
+            account, created = Account.objects.get_or_create(**params)
+            return parsed.guest_name, account
+
+        if parsed.type == 'phone':
+            params['phone'] = parsed.value
+            account, created = Account.objects.get_or_create(**params)
+            return parsed.guest_name, account
+
+    def send_invite_notifications(self, event_guests):
+
+        sender = self.request.user
+        notification_type = NotificationTypes.EVENT_INVITE.value
+        for eg in event_guests:
+            if eg.event.status != EventStatus.ACTIVE.value:
+                continue
+            async_send_notifications(notification_type, sender.id, eg.guest_id, 'event', eg.event_id)  # async
 
 
 class EventGuestDetail(MultipleFieldLookupMixin, generics.RetrieveUpdateDestroyAPIView):
@@ -344,6 +415,101 @@ class EventGuestDetail(MultipleFieldLookupMixin, generics.RetrieveUpdateDestroyA
     queryset = EventGuest.objects.all()
     serializer_class = EventGuestUpdateSerializer
     lookup_fields = ('event_id', 'guest_id')
+
+
+class AnonEventGuestDetail(MultipleFieldLookupMixin, generics.RetrieveUpdateAPIView):
+
+    queryset = EventGuest.objects.all()
+    serializer_class = EventGuestUpdateSerializer
+    lookup_fields = ('event_id', 'token')
+
+
+# Defining this global variable to help us in tests. For some reason, the test pick up a stale
+# version of the content type when finding the event content type in class variables. So,
+# its a global so that the test suite can reset this value everywhere in the views module at once.
+# It's this or writing a get_queryset for each class, which seems unneccessary just to get tests to work.
+# Also tried setting contenttypes as a fixture, and that didn't seem to work either.
+
+EVENT_CONTENT_TYPE = ContentType.objects.get_for_model(Event)
+
+
+class EventCommentList(generics.ListCreateAPIView):
+
+    permission_classes = (permissions.IsAuthenticatedOrReadOnly, CanCommentOnEvent)
+    serializer_class = EventCommentListSerializer
+    content_type = ContentType.objects.get_for_model(Event)
+
+    def get_queryset(self):
+        event = Event.objects.get(pk=self.kwargs['event_id'])
+        self.check_object_permissions(self.request, event)
+        return event.comments.filter(parent=None).order_by('created')
+
+    def create(self, request, *args, **kwargs):
+
+        event = Event.objects.get(pk=self.kwargs['event_id'])
+        self.check_object_permissions(self.request, event)
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        text = serializer.validated_data['text']
+
+        comment = Comment.objects.create(owner=request.user,
+                                         object_id=event.id,
+                                         content_type=EVENT_CONTENT_TYPE,
+                                         text=text)
+
+        serializer = self.get_serializer(comment, context={'request': request})
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+
+class EventCommentDetail(generics.RetrieveUpdateDestroyAPIView):
+
+    permission_classes = (permissions.IsAuthenticatedOrReadOnly, CanCommentOnEvent)
+
+    serializer_class = EventCommentSerializer
+    queryset = Comment.objects.filter()
+
+
+class EventCommentResponseList(generics.ListCreateAPIView):
+
+    permission_classes = (permissions.IsAuthenticatedOrReadOnly, CanCommentOnEvent)
+
+    queryset = Comment.objects.filter(content_type=EVENT_CONTENT_TYPE)
+
+    serializer_class = EventCommentResponseSerializer
+
+    def get_queryset(self):
+        event = Event.objects.get(pk=self.kwargs['event_id'])
+        self.check_object_permissions(self.request, event)
+        return Comment.objects.filter(object_id=event.pk, parent_id=self.kwargs['comment_id']).order_by('created')
+
+    def create(self, request, *args, **kwargs):
+
+        event = Event.objects.get(pk=self.kwargs['event_id'])
+        self.check_object_permissions(self.request, event)
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        text = serializer.validated_data['text']
+        comment = Comment.objects.create(owner=request.user,
+                                         object_id=kwargs['event_id'],
+                                         parent_id=kwargs['comment_id'],
+                                         content_type=EVENT_CONTENT_TYPE,
+                                         text=text)
+
+        serializer = self.get_serializer(comment, context={'request': request})
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+
+class EventCommentResponseDetail(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = (permissions.IsAuthenticatedOrReadOnly, CanCommentOnEvent)
+    queryset = Comment.objects.filter()
+
+    serializer_class = EventCommentResponseSerializer
 
 
 class NotificationCustomPagination(pagination.PageNumberPagination):
@@ -434,26 +600,6 @@ class FollowerDetail(MultipleFieldLookupMixin, generics.RetrieveUpdateAPIView):
     queryset = Follow.objects.all()
     serializer_class = FollowerUpdateSerializer
     lookup_fields = ('follower_id', 'followee_id')
-
-
-class StreamList(generics.ListAPIView):
-    permission_classes = (permissions.IsAuthenticated, IsAccountOwnerOrDenied)
-
-    serializer_class = StreamSerializer
-    paginate_by = 20
-
-    def get_account(self):
-        try:
-            account = Account.objects.get(pk=self.kwargs['pk'])
-        except Account.DoesNotExist:
-            raise Http404(_('Account does not exist'))
-        else:
-            return account
-
-    def get_queryset(self):
-        account = self.get_account()
-        self.check_object_permissions(self.request, account)
-        return account.streams.all()
 
 
 class Login(APIView):
@@ -549,12 +695,11 @@ class VerifyPasswordReset(APIView):
         # Find the candidate reset(s)
         pwresets = PasswordReset.objects.filter(
             email=serializer.data['email'],
-            reset_date=None,
-            message_sent_date__gt=(timezone.now() - PasswordReset.TOKEN_EXPIRY_TIMEDELTA))
+            reset_date=None)
 
         recovery_pwr = None
         for pwr in pwresets:
-            if pwr.get_password_reset_token() == serializer.data['token']:
+            if pwr.get_password_reset_token() == serializer.data['token'] and pwr.can_still_use():
                 recovery_pwr = pwr
                 break
 
@@ -621,8 +766,18 @@ def comm_channel_validate(comm_type, request, validation_token, format=None):
         # log in user
         account.backend = 'django.contrib.auth.backends.ModelBackend'  # fake this so we don't need to authenticate before login
         login(request, account)
-        # Redirect to success validation page
-        return redirect('fe:set-profile')
+
+        msg = "Your information is confirmed."
+        if comm_type == CommChannel.EMAIL:
+            msg = "Your email address is confirmed."
+        elif comm_type == CommChannel.PHONE:
+            msg = "Your phone number is confirmed."
+
+        # Fake out the message framework (as we are dealing with a rest Request rather than a Django HttpRequest)
+        if hasattr(request, '_messages'):
+            request._messages.add(messages.SUCCESS, msg, '')
+
+        return redirect('fe:home')
 
 
 class GoogleApiAuthorization(APIView):
