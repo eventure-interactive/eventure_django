@@ -61,5 +61,26 @@
         },
         "model": "core.account",
         "pk": 3
+    },
+    {
+        "fields": {
+            "date_joined": "2015-06-22T20:43:52Z",
+            "is_staff": false,
+            "email": "tidushue@gmail.com",
+            "last_login": null,
+            "show_welcome_page": true,
+            "user_permissions": [],
+            "last_ntf_checked": null,
+            "groups": [],
+            "is_superuser": false,
+            "status": 3,
+            "modified": "2015-07-08T17:35:17.847Z",
+            "phone": "+17148885070",
+            "password": "pbkdf2_sha256$20000$rEOOjQwplrcP$Q24zwZECL/PMmCtR/4ZH/5N/ImStqQNJM9Ok9J91EJk=",
+            "name": "Tidus Hue",
+            "profile_albumfile": null
+        },
+        "model": "core.account",
+        "pk": 4
     }
 ]

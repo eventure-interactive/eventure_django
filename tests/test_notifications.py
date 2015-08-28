@@ -14,20 +14,8 @@ from django.contrib.contenttypes.models import ContentType
 
 
 class FollowTests(APITestCase):
-    # to create this fixtures
-    # python manage.py dumpdata core > core/fixtures/core_initial_data.json --natural-foreign --indent=4 -e contenttypes -e auth.Permission
-    fixtures = ['core_initial_data_2', ]
 
-    # def create_fixtures(self):
-    #     # create new user account
-    #     self.user = Account.objects.create(phone='+17146032364', name='Henry', password='testing')
-    #     self.user.save()
-
-    #     self.user2 = Account.objects.create(phone='+17148885070', name='Tidus', password='testing')
-    #     self.user2.save()
-
-    #     event_album_type = AlbumType.objects.create(id=5, name='DEFAULT_EVENT', description='Default event album', is_deletable=False, is_virtual=False, sort_order=60)
-    #     event_album_type.save()
+    fixtures = ['core_accounts', ]
 
     def setUp(self):
         # self.create_fixtures()
@@ -74,9 +62,14 @@ class FollowTests(APITestCase):
         url = reverse('notification-list')
         response = self.client2.get(url)
 
-        ntf = response.data['results'][0]
-        self.assertEqual(ntf['object_id'], event_id, ntf)
-        self.assertEqual(ntf['content_type'], 'event')
+        ntf = {}
+        for n in response.data['results']:
+            if n.get('content_type') == 'event':
+                ntf = n
+                break
+
+        self.assertEqual(ntf.get('content_type'), 'event', ntf)
         self.assertEqual(ntf['notification_type'], 1)  # EVENT_INVITE
+        self.assertEqual(ntf['object_id'], event_id, (ntf, event_url))
 
 # EOF

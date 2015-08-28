@@ -1,0 +1,29 @@
+{% extends "email/base-layout.htm" %}
+
+{% block subject %}The event "{{ Name }}" has been cancelled{% endblock %}
+
+{% block content %}
+<table width="100%" align="center" style="text-align:center; border-collapse:collapse;">
+	<tr>
+	     <td style="padding-top:40px" >
+            {% if ProfileImage %}
+            <img src="{{ProfileImage}}" style="-moz-border-radius:50%;-webkit-border-radius:50%;border-radius:50%;max-width:120px;max-height: 120px;" />
+            {% endif %}
+	    </td>
+	</tr>
+	<tr>
+	    <td style="padding-top: 20px; padding-bottom: 43px; font-size:28px; color:#282828; font-style:normal; ">
+            The event "{{ Title }}" has been cancelled.
+	    </td>
+	</tr>
+    
+	<tr>
+	    <td>
+	         <a href="{{ EventCancelledURL }}" style="font-size:16px;font-weight: 300;color:#1f8ec2;text-decoration:none;">Click here for more information.</a>
+	    </td>
+	</tr>
+	<tr>
+	    <td height="40"></td>
+	</tr>
+</table>
+{% endblock %}

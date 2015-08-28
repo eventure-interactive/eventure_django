@@ -213,5 +213,5 @@ class ProfileView(View):
         return render(request, self.template_name, {'account': account})
 
 
-def todo_view(request):
+def todo_view(request, *args, **kwargs):
     return HttpResponse('TODO')

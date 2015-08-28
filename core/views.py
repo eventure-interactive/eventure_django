@@ -101,7 +101,7 @@ class AccountSelfDetail(generics.RetrieveUpdateAPIView):
 
     serializer_class = AccountSelfSerializer
     permission_classes = (permissions.IsAuthenticated, )
-    queryset = Account.actives.filter()
+    queryset = Account.objects.filter(status__in=(AccountStatus.ACTIVE, AccountStatus.SIGNED_UP))
 
     def get_object(self):
         qs = self.get_queryset()
@@ -303,6 +303,10 @@ class EventDetail(generics.RetrieveUpdateDestroyAPIView):
 
         return super().update(request, *args, **kwargs)
 
+    def perform_destroy(self, instance):
+        instance.status = EventStatus.CANCELLED.value
+        instance.save()
+
 
 class EventGuestList(generics.ListCreateAPIView):
     permission_classes = (permissions.IsAuthenticated, IsGrantedAccessToEvent,)
@@ -343,8 +347,6 @@ class EventGuestList(generics.ListCreateAPIView):
         serializer = self.get_serializer(data=request.data, many=many)
         serializer.is_valid(raise_exception=True)
         event_guests = self._create_event_guests(request.data, many)
-
-        self.send_invite_notifications(event_guests)
 
         if len(event_guests) == 1:
             serializer = GuestListSerializer(event_guests[0], context={'request': request})
@@ -396,15 +398,6 @@ class EventGuestList(generics.ListCreateAPIView):
             params['phone'] = parsed.value
             account, created = Account.objects.get_or_create(**params)
             return parsed.guest_name, account
-
-    def send_invite_notifications(self, event_guests):
-
-        sender = self.request.user
-        notification_type = NotificationTypes.EVENT_INVITE.value
-        for eg in event_guests:
-            if eg.event.status != EventStatus.ACTIVE.value:
-                continue
-            async_send_notifications(notification_type, sender.id, eg.guest_id, 'event', eg.event_id)  # async
 
 
 class EventGuestDetail(MultipleFieldLookupMixin, generics.RetrieveUpdateDestroyAPIView):
@@ -614,7 +607,8 @@ class Login(APIView):
     @staticmethod
     def _get_user(login_id):
         try:
-            user = Account.actives.get(Q(phone=login_id) | Q(email=login_id))
+            user = Account.objects.filter(status__in=(AccountStatus.ACTIVE, AccountStatus.SIGNED_UP))\
+                .get(Q(phone=login_id) | Q(email=login_id))
         except Account.DoesNotExist:
             logger.info('User with login_id "{}" not found'.format(login_id))
             return None

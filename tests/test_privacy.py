@@ -30,6 +30,7 @@ class PrivacyTests(APITestCase):
     + AlbumFile: inherit from its Album,
     """
     fixtures = ['core_initial_data_2.json']
+
     def setUp(self):
         # user log in
         self.user = Account.objects.get(email='huy.nguyen@eventure.com')
@@ -40,8 +41,7 @@ class PrivacyTests(APITestCase):
         self.client2 = APIClient()
         self.client2.force_authenticate(user=self.user2)
 
-
-    @override_settings(CELERY_ALWAYS_EAGER=True,)
+    @override_settings(CELERY_ALWAYS_EAGER=True, CELERY_EAGER_PROPAGATES_EXCEPTIONS=True,)
     def test_event_privacy(self):
 
         # Create event
@@ -66,7 +66,7 @@ class PrivacyTests(APITestCase):
         files_url = response.data['files']
 
         data = {
-            'source_url': '''https://upload.wikimedia.org/wikipedia/commons/8/84/Goiaba_vermelha.jpg'''
+            'source_url': "https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Amanhecer_no_Hercules_--.jpg/800px-Amanhecer_no_Hercules_--.jpg"
         }
         response = self.client.post(files_url, data, format='json')
         file_url = response.data['url']
