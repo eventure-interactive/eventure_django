@@ -497,6 +497,10 @@ class Event(models.Model):
 
     objects = models.GeoManager()
 
+    # We will use a signal to store previous values for these fields. Will help us to determine
+    # if we should send notifications out on the event change.
+    tracked_fields = ('start', 'end', 'timezone', 'privacy', 'status', 'location', 'lat', 'lon', 'is_all_day')
+
     class Meta:
         ordering = ('created',)
 
@@ -532,6 +536,8 @@ class EventGuest(models.Model):
     event = models.ForeignKey('Event')
     rsvp = models.SmallIntegerField(choices=RSVP_CHOICES, default=UNDECIDED)
     token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+
+    tracked_fields = ('rsvp',)
 
     # class Meta:
     #     This unique_together constraint is in the db (see migration core 0062_manual_eventguest_unique_constraint)

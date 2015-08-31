@@ -1,6 +1,6 @@
 ﻿{% extends "email/base-layout.htm" %}
 
-{% block subject %}You have been invited to {{ Title }}{% endblock %}
+{% block subject %}Notice: The event "{{ Title }}" has changed{% endblock %}
 
 {% block content %}
 <table width="100%" align="center" style="text-align:center; border-collapse:collapse;">
@@ -13,11 +13,7 @@
 	</tr>
 	<tr>
 	    <td style="padding-top: 20px; padding-bottom: 43px; font-size:28px; color:#282828; font-style:normal; ">
-            {% if AccountName %}
-	           {{ AccountName }} has invited you to...
-            {% else %}
-                You have been invited...
-            {% endif %}
+            The event "{{ Title }}" has changed.
 	    </td>
 	</tr>
     

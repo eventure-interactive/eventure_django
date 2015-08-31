@@ -1,3 +1,5 @@
+NOTICE: Event Information has Changed!
+
 {{ AccountName }} has invited you to...
 
 __Event__
@@ -13,8 +15,9 @@ __Where__
 __Contact__
 {{ Phone }}{% endif %}
 
+{% if AccountName %}
 __Hosted by__
-{{AccountName}}
+{{AccountName}}{% endif %}
 
 {% if Notes %}
 __Notes__

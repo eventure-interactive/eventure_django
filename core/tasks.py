@@ -8,9 +8,12 @@ from django.conf import settings
 from PIL import Image
 import uuid
 from core.models import (
-    AlbumFile, Thumbnail, InAppNotification, Event, Account, AccountSettings, AccountStatus, PasswordReset)
+    AlbumFile, Thumbnail, InAppNotification, Event, Account, AccountSettings, AccountStatus, PasswordReset,
+    EventGuest)
 from core.shared.const.choice_types import NotificationTypes
+from core.shared.utilities import get_absolute_url
 from core.email_sender import send_email, get_template_subject
+from core.sms_sender import send_sms
 from django.core.mail import send_mail
 from django.contrib.contenttypes.models import ContentType
 from django.template import Context
@@ -47,12 +50,89 @@ def send_inapp_notification(notification_type, sender_id, recipient_id, obj_mode
     ntf.save()
 
 
-############### ALBUMFILE PROCESSING ##############
 @shared_task
-def add(x, y):
-    "Test async function."
-    return x + y
+def send_event_invitations(event_id, guest_account_id=None):
 
+    logger.info('Sending invitiations for event_id: {}'.format(event_id))
+    event = Event.objects.get(pk=event_id)
+    ntype = NotificationTypes.EVENT_INVITE.value
+    host_profile_url = get_absolute_url('fe:profile-external', kwargs={'account_id': event.owner.id})
+
+    if guest_account_id:
+        guest_q = event.guests.filter(pk=guest_account_id)
+    else:
+        guest_q = event.guests.all()
+
+    for account in guest_q:
+        rsvp_url = _get_rsvp_url(event, account)
+
+        # Prefer email over SMS
+        if account.email:
+            send_email(ntype, event.owner.id, account.id, 'event', event.id, rsvp_url=rsvp_url,
+                       host_profile_url=host_profile_url)
+        elif account.phone:
+            if event.owner.name:
+                msg = "{} has invited you to an event.\n".format(event.owner.name)
+            else:
+                msg = "You have been invited to an event.\n"
+
+            msg += rsvp_url
+
+            send_sms(account.phone, msg)
+
+
+def _get_rsvp_url(event, guest_account):
+    "Get the RSVP url for an event, including token (if necessary)."
+    url = get_absolute_url('fe:event-rsvp', kwargs={'event_id': event.id})
+    if guest_account.status != AccountStatus.ACTIVE:
+        event_guest = EventGuest.objects.get(event=event, guest=guest_account)
+        url += "t={}".format(event_guest.token)
+
+    return url
+
+
+@shared_task
+def send_event_cancellation_notifications(event_id):
+
+    logger.info('Sending cancellations for event {}'.format(event_id))
+    event = Event.objects.get(pk=event_id)
+    ntype = NotificationTypes.EVENT_CANCEL.value
+
+    url = get_absolute_url('fe:event-cancelled', kwargs={'event_id': event_id})
+
+    for account in event.guests.all():
+        if account.email:
+            send_email(ntype, event.owner.id, account.id, 'event', event.id, event_cancelled_url=url)
+        elif account.phone:
+            if event.owner.name:
+                msg = "{} has cancelled an event.\n{}".format(event.owner.name, url)
+            else:
+                msg = 'The event "{}" has been cancelled.\n{}'.format(event.title, url)
+            send_sms(account.phone, msg)
+
+
+@shared_task
+def send_event_update_notifications(event_id):
+
+    logger.info('Sending cancellations for event {}'.format(event_id))
+    event = Event.objects.get(pk=event_id)
+    ntype = NotificationTypes.EVENT_UPDATE.value
+    host_profile_url = get_absolute_url('fe:profile-external', kwargs={'account_id': event.owner.id})
+
+    for account in event.guests.all():
+        rsvp_url = _get_rsvp_url(event, account)
+        if account.email:
+            send_email(ntype, event.owner.id, account.id, 'event', event.id, rsvp_url=rsvp_url,
+                       host_profile_url=host_profile_url)
+        elif account.phone:
+            if event.owner.name:
+                msg = "{} has changed an event you are invited to.\n{}".format(event.owner.name, rsvp_url)
+            else:
+                msg = "An event you are invited to has changed.\n{}".format(rsvp_url)
+            send_sms(account.phone, msg)
+
+
+############### ALBUMFILE PROCESSING ##############
 
 @shared_task
 def finalize_s3_thumbnails(json_data):

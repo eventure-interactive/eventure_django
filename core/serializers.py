@@ -11,7 +11,6 @@ from .models import Account, AccountSettings, Album, AlbumType, AlbumFile, Thumb
 from django.utils import timezone
 import pytz
 import requests
-from .tasks import async_send_notifications
 from core.shared.const.choice_types import NotificationTypes, EventStatus
 from core.sms_sender import async_send_validation_phone
 from core import common
@@ -344,17 +343,7 @@ class AlbumFileSerializer(serializers.HyperlinkedModelSerializer):
             af.save()
             album.albumfiles.add(af)
 
-            # send out in-app notifications to all guests
-            guests = album.event.guests.all()
-            self.send_notifications(guests, af)
-
             return af
-
-    def send_notifications(self, guests, albumfile):
-        notification_type = NotificationTypes.ALBUMFILE_UPLOAD.value
-        sender = self.context['request'].user
-        for guest in guests:
-            async_send_notifications(notification_type, sender.id, guest.id, 'albumfile', albumfile.id)
 
 
 class DateTimeFieldUTC(serializers.DateTimeField):
@@ -428,7 +417,6 @@ class EventSerializer(serializers.HyperlinkedModelSerializer):
                 instance.featured_albumfile = event_af
 
         instance = super().update(instance, validated_data)
-        self.send_notifications(instance)
         return instance
 
     def create(self, validated_data):
@@ -444,16 +432,6 @@ class EventSerializer(serializers.HyperlinkedModelSerializer):
             event.save()
 
         return event
-
-    def send_notifications(self, event):
-        if event.status == EventStatus.DRAFT.value:
-            return
-
-        notification_type = NotificationTypes.EVENT_UPDATE.value
-        sender = self.context['request'].user
-        guests = event.guests.all()
-        for guest in guests:
-            async_send_notifications(notification_type, sender.id, guest.id, 'event', event.id)
 
     def get_start_local_time(self, obj):
         return self._localized_dt(obj, obj.start)
@@ -579,18 +557,7 @@ class EventGuestUpdateSerializer(serializers.HyperlinkedModelSerializer):
     def update(self, instance, validated_data):
         instance.rsvp = validated_data.get('rsvp')
         instance.save()
-
-        self.send_notifications(instance)
-
         return instance
-
-    def send_notifications(self, eventguest):
-        notification_type = NotificationTypes.EVENTGUEST_RSVP.value
-        sender = self.context['request'].user
-        event = eventguest.event
-        recipient = event.owner
-
-        async_send_notifications(notification_type, sender.id, recipient.id, 'eventguest', eventguest.id)  # async
 
     def get_name(self, obj):
         return obj.name or obj.guest.name or None

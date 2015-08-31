@@ -18,6 +18,7 @@ class ChoiceEnum(Enum):
 class NotificationTypes(ChoiceEnum):
     EVENT_INVITE = 1
     EVENT_UPDATE = 3
+    EVENT_CANCEL = 6
     EVENTGUEST_RSVP = 2
     ALBUMFILE_UPLOAD = 4
     ACCOUNT_EMAIL_VALIDATE = 5

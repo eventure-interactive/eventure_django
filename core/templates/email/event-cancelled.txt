@@ -1,0 +1,5 @@
+The event "{{Title}}" has been cancelled.
+
+For more information, please go to:
+
+{{ EventCancelledURL }}

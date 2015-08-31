@@ -12,6 +12,7 @@ import json
 import re
 from core.tasks import finalize_s3_thumbnails
 from django.core import mail
+from unittest.mock import patch
 
 
 class EventTests(APITestCase):
@@ -335,18 +336,12 @@ class EventTests(APITestCase):
             'account_id:{}'.format(self.user2.id),
         )
 
-        for guest in guests:
-            response = self.client.post(guests_url, {'guest': guest}, format='json')
-            self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-
-        resp = self.client.get(guests_url)
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(resp.data['count'], 5)
+        self._add_guests(guests_url, guests)  # Asserts they got created
 
         # test bad formats
         bad_guests = (
             '+199999',
-            '+44 20 8366 1177',
+            '+44 20 8366 1177',  # Not E.164 (has spaces)
             '16572001110',
             'phony@email',
             'really no information at all',
@@ -361,5 +356,185 @@ class EventTests(APITestCase):
         resp = self.client.get(guests_url)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data['count'], 5)
+
+    @patch('core.tasks.send_sms')
+    def test_event_guest_notification(self, send_sms_mock):
+        "Guests to events recieve various notifications."
+
+        title = "Send Notifications Test"
+        response = self._create_messagetst_event(title=title, status=EventStatus.ACTIVE.value)
+        guests_url = response.data['guests']
+        event = Event.objects.get(title=title, owner=self.user)
+
+        # Set our mock for sms
+        send_sms_mock.return_value = {'error_code': None, 'error_message': None}
+
+        # Guests recieve invitations
+        guests = ("someone@example.com", "+16575550001", "account_id:{}".format(self.user2.id))
+        self._add_guests(guests_url, guests)
+
+        # should have 2 emails sent
+        self.assertEqual(len(mail.outbox), 2)
+        email_addresses = {guests[0], self.user2.email}
+        for sent_mail in mail.outbox:
+            self.assertEqual(sent_mail.subject, "You have been invited to {}".format(title))
+            self.assertEqual(len(sent_mail.to), 1)
+            address = sent_mail.to[0]
+            self.assertIn(address, email_addresses)
+
+            email_addresses.remove(address)
+
+        # should have sent one SMS
+        calls = send_sms_mock.mock_calls
+        self.assertEqual(len(calls), 1)
+        called_phone, sms_msg = send_sms_mock.call_args[0]
+        self.assertEqual(called_phone, guests[1])
+        invite_txt, url = sms_msg.split("\n")
+        self.assertEqual(invite_txt, "Huy Nguyen has invited you to an event.")
+        expected_url = reverse('fe:event-rsvp', kwargs={'event_id': event.id})
+        self.assertIn(expected_url, url)
+
+    @patch('core.tasks.send_sms')
+    def test_draft_to_active_messages(self, send_sms_mock):
+        "We send invitiations when we change the event status from Draft to Active."
+
+        title = "Send Notifications Test"
+        response = self._create_messagetst_event(title=title, status=EventStatus.DRAFT.value)
+        event_url = response.data['url']
+        guests_url = response.data['guests']
+        event = Event.objects.get(title=title, owner=self.user)
+
+        # Set our mock for sms
+        send_sms_mock.return_value = {'error_code': None, 'error_message': None}
+
+        # Add our guests
+        guests = ("someone@example.com", "+16575550001", "account_id:{}".format(self.user2.id))
+        self._add_guests(guests_url, guests)
+
+        # Should have no emails and no SMS
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertEqual(send_sms_mock.call_count, 0)
+
+        # flip status to active
+        active_resp = self.client.put(event_url,
+                                      {'title': title,
+                                       'status': EventStatus.ACTIVE.value,
+                                       'start': response.data['start'],
+                                       'end': response.data['end'],
+                                       'timezone': response.data['timezone']},
+                                      format="json")
+        self.assertEqual(active_resp.status_code, status.HTTP_200_OK, active_resp.data)
+
+        # Make sure we sent out invites.
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertEqual(send_sms_mock.call_count, 1, send_sms_mock.called)
+
+    @patch('core.tasks.send_sms')
+    def test_cancelled_event_messages(self, send_sms_mock):
+        "We send cancellation notifications when an event is cancelled."
+
+        title = "Will Cancel Soon"
+        response = self._create_messagetst_event(title=title, status=EventStatus.ACTIVE.value)
+        event_url = response.data['url']
+        guests_url = response.data['guests']
+        event = Event.objects.get(title=title, owner=self.user)
+
+        guests = ("someone@example.com", "+16575550001", "account_id:{}".format(self.user2.id))
+        self._add_guests(guests_url, guests)
+
+        # Reset the test notification channels -- other tests assert creation notifications work.
+        mail.outbox = []
+        send_sms_mock.reset_mock()
+
+        # cancel the event
+        del_resp = self.client.delete(event_url)
+        self.assertEqual(del_resp.status_code, status.HTTP_204_NO_CONTENT)
+
+        # check email
+        self.assertEqual(len(mail.outbox), 2)
+        email_addresses = {guests[0], self.user2.email}
+        for sent_mail in mail.outbox:
+            self.assertIn("has been cancelled", sent_mail.subject)
+            self.assertEqual(len(sent_mail.to), 1)
+            address = sent_mail.to[0]
+            self.assertIn(address, email_addresses)
+            email_addresses.remove(address)
+
+        # check sms
+        self.assertEqual(send_sms_mock.call_count, 1)
+        called_phone, sms_msg = send_sms_mock.call_args[0]
+        self.assertEqual(called_phone, guests[1])
+        invite_txt, url = sms_msg.split("\n")
+        self.assertIn("cancelled", invite_txt)
+        expected_url = reverse('fe:event-cancelled', kwargs={'event_id': event.id})
+        self.assertIn(expected_url, url)
+
+    @patch('core.tasks.send_sms')
+    def test_changed_event_messages(self, send_sms_mock):
+        "We send notifications out when an event changes"
+
+        title = "Will Change Soon"
+        response = self._create_messagetst_event(title=title, status=EventStatus.ACTIVE.value)
+        event_url = response.data['url']
+        guests_url = response.data['guests']
+        event = Event.objects.get(title=title, owner=self.user)
+
+        guests = ("someone@example.com", "+16575550001", "account_id:{}".format(self.user2.id))
+        self._add_guests(guests_url, guests)
+
+        # Reset the test notification channels -- other tests assert creation notifications work.
+        mail.outbox = []
+        send_sms_mock.reset_mock()
+
+        # change the event start and end time
+        now = timezone.now()
+        change_resp = self.client.put(event_url, {
+                                      'title': title,
+                                      'start': (now + datetime.timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                      'end': (now + datetime.timedelta(hours=25)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                      'location': 'TBD',
+                                      'timezone': 'US/Pacific',
+                                      'status': EventStatus.ACTIVE.value}, format='json')
+        self.assertEqual(change_resp.status_code, status.HTTP_200_OK, change_resp.data)
+
+        # Check email
+        self.assertEqual(len(mail.outbox), 2)
+        email_addresses = {guests[0], self.user2.email}
+        for sent_mail in mail.outbox:
+            self.assertEqual('Notice: The event "{}" has changed'.format(title), sent_mail.subject)
+            self.assertEqual(len(sent_mail.to), 1)
+            address = sent_mail.to[0]
+            self.assertIn(address, email_addresses)
+            email_addresses.remove(address)
+
+        # Check SMS
+        self.assertEqual(send_sms_mock.call_count, 1)
+        called_phone, sms_msg = send_sms_mock.call_args[0]
+        self.assertEqual(called_phone, guests[1])
+        txt, url = sms_msg.split("\n")
+        self.assertEquals("{} has changed an event you are invited to.".format(self.user.name), txt)
+        expected_url = reverse('fe:event-rsvp', kwargs={'event_id': event.id})
+        self.assertIn(expected_url, url)
+
+    def _create_messagetst_event(self, title, status):
+        # Create the event
+        now = timezone.now()
+        data = {'title': title,
+                'start': (now + datetime.timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                'end': (now + datetime.timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                'location': 'TBD',
+                'timezone': 'US/Pacific',
+                'status': status}
+
+        return self.client.post(reverse('event-list'), data, format='json')
+
+    def _add_guests(self, guests_url, guests):
+        for g in guests:
+            resp = self.client.post(guests_url, {'guest': g}, format="json")
+            self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+
+        resp = self.client.get(guests_url)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['count'], len(guests))
 
 # EOF

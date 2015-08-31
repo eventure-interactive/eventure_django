@@ -8,6 +8,7 @@ from django.contrib.contenttypes.models import ContentType
 from core.models import Account, CommChannel
 from celery import shared_task
 from django.utils import timezone
+import pytz
 import logging
 logger = logging.getLogger(__name__)
 
@@ -15,6 +16,8 @@ logger = logging.getLogger(__name__)
 # MAPPING from NotificationType to Email Template
 notification_map = {
     NotificationTypes.EVENT_INVITE.value: 'email/plan-invitation',
+    NotificationTypes.EVENT_CANCEL.value: 'email/event-cancelled',
+    NotificationTypes.EVENT_UPDATE.value: 'email/event-changed',
     # NotificationTypes.EVENTGUEST_RSVP.value: '',  TODO
     # NotificationTypes.ALBUMFILE_UPLOAD.value: '',  TODO
     NotificationTypes.ACCOUNT_EMAIL_VALIDATE.value: 'email/activate-email',
@@ -47,9 +50,7 @@ def get_template_subject(rendered_template):
 def _send(NotificationType, to_email, data):
     template = notification_map.get(NotificationType)
     if template is None:
-        # raise ValueError("Email template not found")
-        logger.error("Email template for NotificationType %s is not found" % (NotificationType))
-        return
+        raise NotImplementedError("Email template for NotificationType %s is not found" % (NotificationType))
 
     plaintext = get_template(template + '.txt')
     htmly = get_template(template + '.htm')
@@ -68,7 +69,7 @@ def _send(NotificationType, to_email, data):
 
 
 @shared_task
-def send_email(NotificationType, sender_id, recipient_id, obj_model_class, obj_id):
+def send_email(NotificationType, sender_id, recipient_id, obj_model_class, obj_id, **kwargs):
     # TODO Check if recipient wants email notification for this notification type
 
     # Gather email data then send
@@ -76,11 +77,11 @@ def send_email(NotificationType, sender_id, recipient_id, obj_model_class, obj_i
     to_email = recipient.email
 
     if to_email:
-        data = gather_email_data(NotificationType, sender_id, recipient_id, obj_model_class, obj_id)
+        data = gather_email_data(NotificationType, sender_id, recipient_id, obj_model_class, obj_id, **kwargs)
         _send(NotificationType, to_email, data)
 
 
-def gather_email_data(NotificationType, sender_id, recipient_id, obj_model_class, obj_id):
+def gather_email_data(NotificationType, sender_id, recipient_id, obj_model_class, obj_id, **kwargs):
     ''' Each email notification template requires certain fields '''
     if sender_id:
         sender = Account.objects.get(pk=sender_id)
@@ -95,15 +96,26 @@ def gather_email_data(NotificationType, sender_id, recipient_id, obj_model_class
         "RegisterUrl": settings.REGISTER_URL,
     }
 
-    if NotificationType == NotificationTypes.EVENT_INVITE.value:
+    if NotificationType in {NotificationTypes.EVENT_INVITE.value, NotificationTypes.EVENT_UPDATE.value}:
+        timezone = pytz.timezone(content_object.timezone)
+        start_dt = content_object.start.astimezone(timezone)
         data.update({
             'AccountName': sender.name,
             'Title': content_object.title,
-            'StartDate': content_object.start.strftime("%b %d, %Y at %r (%Z)"),
+            'StartDate': start_dt.strftime("%B {day}, %Y at {hour}:%M (%Z)").format(
+                day=start_dt.day, hour=start_dt.strftime("%I").lstrip('0')),
             'Address': content_object.location,
             'Phone': sender.phone,
             'Notes': None,
             'PlanID': obj_id,
+            'RSVPUrl': kwargs['rsvp_url'],
+            'HostProfileUrl': kwargs['host_profile_url'],
+        })
+    elif NotificationType == NotificationTypes.EVENT_CANCEL.value:
+        event = content_object
+        data.update({
+            'Title': event.title,
+            'EventCancelledURL': kwargs['event_cancelled_url'],
         })
     # elif NotificationType == NotificationTypes.EVENTGUEST_RSVP.value:  TODO
     # elif NotificationType == NotificationTypes.ALBUMFILE_UPLOAD.value:  TODO

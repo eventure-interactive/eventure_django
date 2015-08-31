@@ -18,4 +18,7 @@ urlpatterns = [
     # TODO
     url(r'^bad-channel-validation-token$', views.todo_view, name='bad-channel-validation'),
     url(r'^welcome-tour$', views.todo_view, name='welcome-tour'),
+    url(r'^(?P<event_id>[0-9]+)/rsvp$', views.todo_view, name='event-rsvp'),
+    url(r'^(?P<event_id>[0-9]+)/cancelled$', views.todo_view, name='event-cancelled'),
+    url(r'^profile/(?P<account_id>[0-9]+)$', views.todo_view, name="profile-external"),  # Profile that others can view?
 ]
