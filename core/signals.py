@@ -71,19 +71,23 @@ def to_icloud(event_id):
     Params: event: core.models.event
     """
     # TODO: need to check that event status is not draft
-    event = Event.objects.get(pk=event_id)
-    ical_event = icloud_http.to_ical_event(event)
-    caldav_event = icloud_webdav.to_ical_event(event)
-    # For event owner
-    response = export_to_icloud(event.owner, None, ical_event, caldav_event)
-    if response is not None and response.status_code != 200:
-        logger.error(response.json())
-
-    # For guest
-    guests = EventGuest.objects.filter(Q(event_id=event_id), Q(guest__status=AccountStatus.ACTIVE),)
-
-    for guest in guests:
-        response = export_to_icloud(guest.guest, guest.rsvp, ical_event, caldav_event)
-        # Log if error
+    try:
+        event = Event.objects.get(pk=event_id)
+    except Event.DoesNotExist:
+        logger.error('Event %d does not exist' % event_id)
+    else:
+        ical_event = icloud_http.to_ical_event(event)
+        caldav_event = icloud_webdav.to_ical_event(event)
+        # For event owner
+        response = export_to_icloud(event.owner, None, ical_event, caldav_event)
         if response is not None and response.status_code != 200:
             logger.error(response.json())
+
+        # For guest
+        guests = EventGuest.objects.filter(Q(event_id=event_id), Q(guest__status=AccountStatus.ACTIVE),)
+
+        for guest in guests:
+            response = export_to_icloud(guest.guest, guest.rsvp, ical_event, caldav_event)
+            # Log if error
+            if response is not None and response.status_code != 200:
+                logger.error(response.json())
