@@ -89,7 +89,7 @@ DATABASES = {
         'NAME': 'evti',
         'USER': 'web-dev',
         'PASSWORD': '1Billion',
-        'HOST': 'pgdb-dev.eventure.com',
+        'HOST': 'eventure-django-dev.cqjwkdb3yacb.us-east-1.rds.amazonaws.com',  # 'pgdb-dev.eventure.com',
         'PORT': 5432,
     }
 }
