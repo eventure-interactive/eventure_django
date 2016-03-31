@@ -9,7 +9,8 @@ from rest_framework.parsers import JSONParser, FormParser
 from rest_framework.response import Response
 from rest_framework.reverse import reverse
 from rest_framework.renderers import JSONRenderer
-from rest_framework.compat import OrderedDict
+# from rest_framework.compat import OrderedDict
+from collections import OrderedDict
 from rest_framework.views import APIView
 from rest_framework import filters
 from core.models import (
@@ -49,6 +50,7 @@ import datetime
 from core.shared.google_data_api import GDataClient, CredentialNotExistError, PermissionError
 from core.shared.const.choice_types import EventStatus, NotificationTypes
 from core.tasks import async_send_notifications
+import requests
 import logging
 logger = logging.getLogger(__name__)
 
@@ -240,6 +242,10 @@ class EventList(generics.ListCreateAPIView):
     '''
     URL_PARAM_VICINITY = 'vicinity'
     URL_PARAM_MILES = 'miles'
+    URL_PARAM_Q = 'q' #full text search
+    URL_PARAM_LAT = 'lat'
+    URL_PARAM_LONG = 'long'
+    URL_PARAM_PAGE = 'page'
 
     permission_classes = (IsAuthenticatedOrReadOnly,)
     serializer_class = EventSerializer
@@ -282,6 +288,30 @@ class EventList(generics.ListCreateAPIView):
             events = events.exclude(Q(privacy=Event.PRIVATE),
                                     ~Q(owner=self.request.user) & ~Q(eventguest__guest=self.request.user))
         return events
+
+    def get_Eventbrite_events(self):
+        EVENTBRITE_TOKEN = 'ST4P3CIDNHWVDAILPZFW'
+        EVENTBRITE_API_ENDPOINT = 'https://www.eventbriteapi.com/v3/events/search'
+        # mapping from evenbrite query parameters to eventure ones
+        eventbrite_2_eventure = {
+            'q': self.URL_PARAM_Q,
+            'location.latitude': self.URL_PARAM_LAT,
+            'location.longitude': self.URL_PARAM_LONG,
+            'location.within': self.URL_PARAM_VICINITY,
+            'page': self.URL_PARAM_PAGE,
+        }
+
+        params = {'token': EVENTBRITE_TOKEN}
+
+        for key, value in eventbrite_2_eventure:
+            if self.request.query_params.get(value) is not None:
+                if key == 'location.within':
+                    params.update({key: self.request.query_params.get(value) + 'mi'})
+                else:
+                    params.update({key: self.request.query_params.get(value)})
+
+        response = requests.get(EVENTBRITE_API_ENDPOINT, params=params)
+        return response['events']  # page size 50
 
 
 class EventDetail(generics.RetrieveUpdateDestroyAPIView):
